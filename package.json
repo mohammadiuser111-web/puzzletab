@@ -26,11 +26,13 @@
       "main.js",
       "preload.js",
       "winctl.js",
+      "winmirror.js",
       "renderer/**/*",
       "assets/**/*"
     ],
     "extraResources": [
-      { "from": "winhelper", "to": "winhelper" }
+      { "from": "winhelper", "to": "winhelper" },
+      { "from": "winmirror/publish/winmirror.exe", "to": "winmirror/winmirror.exe" }
     ],
     "win": {
       "target": [

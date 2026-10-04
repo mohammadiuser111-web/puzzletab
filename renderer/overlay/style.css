@@ -65,44 +65,80 @@ html[data-theme="light"] {
   backdrop-filter: blur(20px);
 }
 
+html[data-theme="dark"] {
+  --win-bg: #202020;
+  --win-titlebar: #2b2b2b;
+  --win-border: rgba(255,255,255,.08);
+  --win-caption-fg: #e6e6e6;
+  --win-caption-hover: rgba(255,255,255,.08);
+}
+html[data-theme="light"] {
+  --win-bg: #f3f3f3;
+  --win-titlebar: #fafafa;
+  --win-border: rgba(0,0,0,.08);
+  --win-caption-fg: #1b1b1b;
+  --win-caption-hover: rgba(0,0,0,.06);
+}
+
 .gtile {
   position: absolute;
-  border-radius: 10px;
-  border: 1px solid var(--stroke);
-  background: var(--acrylic);
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  border-radius: 8px;
+  border: 1px solid var(--win-border);
+  background: var(--win-bg);
+  box-shadow: 0 8px 16px rgba(0,0,0,.28), 0 1.5px 4px rgba(0,0,0,.22);
   display: flex; flex-direction: column;
   overflow: hidden;
   min-width: 220px; min-height: 140px;
+  transition: box-shadow .12s ease;
 }
-.gtile.dragging, .gtile.resizing { box-shadow: 0 16px 40px rgba(0,0,0,.5); outline: 2px solid var(--accent); }
+.gtile.dragging, .gtile.resizing { box-shadow: 0 20px 44px rgba(0,0,0,.42), 0 0 0 1px var(--accent); }
+.gtile.minimized { opacity: .55; }
+.gtile.gmaximized { border-radius: 0; }
 
 .ghead {
   -webkit-app-region: no-drag;
-  flex: none; height: 38px;
-  display: flex; align-items: center; gap: 8px;
-  padding: 0 8px 0 10px;
-  background: var(--head);
+  direction: ltr;
+  flex: none; height: 32px;
+  display: flex; align-items: center;
+  padding: 0 0 0 12px;
+  background: var(--win-titlebar);
   cursor: grab;
-  border-bottom: 1px solid var(--stroke);
+  border-bottom: 1px solid var(--win-border);
 }
 .ghead:active { cursor: grabbing; }
-.gic { width: 18px; height: 18px; flex: none; display: grid; place-items: center; font-size: 13px; }
+.gic { width: 16px; height: 16px; flex: none; display: grid; place-items: center; font-size: 12px; margin-inline-end: 10px; }
 .gic img { width: 100%; height: 100%; object-fit: contain; }
-.gtitle { flex: 1; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gtitle {
+  flex: 1; min-width: 0; font-size: 12px; color: var(--win-caption-fg);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-family: "Segoe UI Variable Text", "Segoe UI", "Vazirmatn", Tahoma, sans-serif;
+}
 .gref {
-  flex: none; height: 24px; font-size: 11px; border-radius: 5px; border: 1px solid var(--stroke);
-  background: rgba(255,255,255,.08); color: var(--text); padding: 0 4px;
+  flex: none; height: 22px; font-size: 10.5px; border-radius: 4px; border: 1px solid var(--win-border);
+  background: var(--win-caption-hover); color: var(--win-caption-fg); padding: 0 4px; margin-inline-end: 6px;
 }
-.gx {
-  flex: none; width: 24px; height: 24px; border-radius: 5px; border: 0;
-  background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px;
-}
-.gx:hover { background: #c42b1c; color: #fff; }
 
-.gbody { flex: 1; display: grid; place-items: center; padding: 10px; }
+.gcaps { flex: none; display: flex; align-items: stretch; height: 100%; }
+.gcap {
+  -webkit-app-region: no-drag;
+  width: 42px; height: 100%; border: 0; background: transparent;
+  color: var(--win-caption-fg); cursor: pointer;
+  display: grid; place-items: center;
+}
+.gcap svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; }
+.gcap.gmax svg rect { fill: none; }
+.gcap:hover { background: var(--win-caption-hover); }
+.gcap.gx:hover { background: #c42b1c; color: #fff; }
+.gcap.gx:hover svg { stroke: #fff; }
+
+.gbody { flex: 1; position: relative; display: grid; place-items: center; padding: 10px; }
 .ginfo { font-size: 11.5px; color: var(--text-2); text-align: center; line-height: 1.6; }
+.gminOverlay {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  background: rgba(0,0,0,.45); color: #fff; font-size: 11.5px; text-align: center;
+  padding: 10px; cursor: pointer;
+}
+.gminOverlay[hidden] { display: none; }
 
 .rz { position: absolute; }
 .rz.n, .rz.s { left: 10px; right: 10px; height: 8px; cursor: ns-resize; }

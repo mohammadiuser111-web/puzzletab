@@ -51,7 +51,8 @@ const realBackend = {
   rect: (handle) => runPS(['-Cmd', 'rect', '-Handle', String(handle)]),
   move: (items) => withTempJson(items, (file) => runPS(['-Cmd', 'move', '-BatchFile', file])),
   zoom: (handle, steps) => runPS(['-Cmd', 'zoom', '-Handle', String(handle), '-Steps', String(steps)], 20000),
-  focus: (handle) => runPS(['-Cmd', 'focus', '-Handle', String(handle)])
+  focus: (handle) => runPS(['-Cmd', 'focus', '-Handle', String(handle)]),
+  minimize: (handle) => runPS(['-Cmd', 'minimize', '-Handle', String(handle)])
 }
 
 /* ---------- بک‌اند آزمایشی (برای توسعه/تست روی غیر ویندوز) ---------- */
@@ -88,6 +89,14 @@ const mockBackend = {
   },
   async focus (handle) {
     console.log('[winctl:mock] focus', handle)
+    const w = mockState.get(Number(handle))
+    if (w) w.minimized = false
+    return { ok: true }
+  },
+  async minimize (handle) {
+    console.log('[winctl:mock] minimize', handle)
+    const w = mockState.get(Number(handle))
+    if (w) w.minimized = true
     return { ok: true }
   }
 }

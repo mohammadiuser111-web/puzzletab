@@ -32,10 +32,17 @@
           <option value="1024">۱۰۲۴ (لپ‌تاپ کوچک)</option>
           <option value="820">۸۲۰ (تبلت)</option>
         </select>
-        <button class="gx" title="حذف از چیدمان">✕</button>
+        <div class="gcaps">
+          <button class="gcap gmin" title="کوچک کردن (Minimize)"><svg viewBox="0 0 10 10"><path d="M0 5h10" /></svg></button>
+          <button class="gcap gmax" title="بزرگ‌نمایی در چیدمان"><svg viewBox="0 0 10 10" class="icoMax"><rect x="0.5" y="0.5" width="9" height="9" /></svg></button>
+          <button class="gcap gx" title="حذف از چیدمان (پنجره واقعی بسته نمی‌شود)"><svg viewBox="0 0 10 10"><path d="M0 0l10 10M10 0L0 10" /></svg></button>
+        </div>
       </div>
       <div class="gbody">
         <div class="ginfo"></div>
+        <div class="gminOverlay" hidden>
+          <span>به‌حالت کوچک درآمد — برای بازگردانی کلیک کن</span>
+        </div>
       </div>
       <div class="rz n" data-dir="n"></div>
       <div class="rz s" data-dir="s"></div>

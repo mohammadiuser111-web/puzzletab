@@ -224,6 +224,7 @@ ipcMain.handle('winctl:rect', async (_e, handle) => { try { return await winctl.
 ipcMain.handle('winctl:move', async (_e, items) => { try { return await winctl.move(items) } catch (e) { return { ok: false, error: e.message } } })
 ipcMain.handle('winctl:zoom', async (_e, handle, steps) => { try { return await winctl.zoom(handle, steps) } catch (e) { return { ok: false, error: e.message } } })
 ipcMain.handle('winctl:focus', async (_e, handle) => { try { return await winctl.focus(handle) } catch (e) { return { ok: false, error: e.message } } })
+ipcMain.handle('winctl:minimize', async (_e, handle) => { try { return await winctl.minimize(handle) } catch (e) { return { ok: false, error: e.message } } })
 
 ipcMain.handle('managed:load', () => (loadStore() || {}).managed || null)
 ipcMain.handle('managed:save', (_e, data) => saveStorePatch({ managed: data }))

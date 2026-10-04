@@ -5,6 +5,8 @@
 
   const els = {}
   let windows = []
+  let lastDebug = null
+  let lastUsedFallback = false
   const selected = new Set()
 
   function cache () {
@@ -34,6 +36,8 @@
       return
     }
     windows = res.windows || []
+    lastDebug = res.debug || null
+    lastUsedFallback = !!res.usedFallback
     render()
   }
 
@@ -43,14 +47,46 @@
     return d.innerHTML
   }
 
+  function buildEmptyDiagnostics () {
+    let html = 'هیچ پنجره‌ای پیدا نشد.'
+    const d = lastDebug
+    if (d) {
+      html += '<br><small style="opacity:.8">تشخیص: دیده‌شده=' + d.seen +
+        '، دیداپذیر=' + d.afterVisible +
+        '، بدون‌مالک=' + d.afterOwner +
+        '، غیرToolWindow=' + d.afterTool +
+        '، غیرCloaked=' + d.afterCloak +
+        '، دارایِ‌عنوان=' + d.afterTitle +
+        '، غیرلیست‌سیاه=' + d.afterClass + '</small>'
+      if (d.errors && d.errors.length) {
+        html += '<br><small style="opacity:.7;color:#e06c6c">' + escapeHtml(d.errors[0]) +
+          (d.errors.length > 1 ? (' (+' + (d.errors.length - 1) + ' خطای دیگر)') : '') + '</small>'
+      }
+      if (d.seen === 0) {
+        html += '<br><small>به‌نظر می‌رسد EnumWindows اصلاً اجرا نشده — ممکن است اجرای PowerShell مسدود شده باشد.</small>'
+      }
+    }
+    return html
+  }
+
   function render () {
     const q = (els.search.value || '').trim().toLowerCase()
     const items = windows.filter((w) => !q || (w.title || '').toLowerCase().includes(q) || (w.process || '').toLowerCase().includes(q))
     if (!items.length) {
-      els.list.innerHTML = '<div class="empty">پنجره‌ای پیدا نشد.</div>'
+      if (!windows.length && !q) {
+        els.list.innerHTML = '<div class="empty">' + buildEmptyDiagnostics() + '</div>'
+      } else {
+        els.list.innerHTML = '<div class="empty">پنجره‌ای با این مشخصات پیدا نشد.</div>'
+      }
       return
     }
     els.list.innerHTML = ''
+    if (lastUsedFallback) {
+      const note = document.createElement('div')
+      note.className = 'note'
+      note.textContent = 'توجه: فیلتر دقیق هیچ پنجره‌ای پیدا نکرد؛ لیست زیر از یک تشخیص نرم‌گیرانه‌تر آمده.'
+      els.list.appendChild(note)
+    }
     items.forEach((w) => {
       const row = document.createElement('div')
       row.className = 'row'

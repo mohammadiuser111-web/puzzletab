@@ -3,7 +3,7 @@
 # دستورها: list | rect | move | zoom | focus
 
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('list', 'rect', 'move', 'zoom', 'focus')][string]$Cmd,
+  [Parameter(Mandatory = $true)][ValidateSet('list', 'rect', 'move', 'zoom', 'focus', 'minimize')][string]$Cmd,
   [string]$Handle,
   [int]$X,
   [int]$Y,
@@ -250,17 +250,26 @@ function Cmd-Zoom {
 
 function Cmd-Focus {
   $h = [IntPtr][int64]$Handle
+  if ([WinAPI]::IsIconic($h)) { [WinAPI]::ShowWindow($h, $SW_RESTORE) | Out-Null }
   $ok = [WinAPI]::SetForegroundWindow($h)
+  return @{ ok = [bool]$ok }
+}
+
+function Cmd-Minimize {
+  $h = [IntPtr][int64]$Handle
+  $SW_MINIMIZE = 6
+  $ok = [WinAPI]::ShowWindow($h, $SW_MINIMIZE)
   return @{ ok = [bool]$ok }
 }
 
 try {
   switch ($Cmd) {
-    'list'  { $r = Cmd-List }
-    'rect'  { $r = Cmd-Rect }
-    'move'  { $r = Cmd-Move }
-    'zoom'  { $r = Cmd-Zoom }
-    'focus' { $r = Cmd-Focus }
+    'list'     { $r = Cmd-List }
+    'rect'     { $r = Cmd-Rect }
+    'move'     { $r = Cmd-Move }
+    'zoom'     { $r = Cmd-Zoom }
+    'focus'    { $r = Cmd-Focus }
+    'minimize' { $r = Cmd-Minimize }
   }
   $r | ConvertTo-Json -Depth 6 -Compress
 } catch {

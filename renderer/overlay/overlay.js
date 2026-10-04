@@ -101,6 +101,9 @@
     const refSel = frag.querySelector('.gref')
     const infoEl = frag.querySelector('.ginfo')
     const btnX = frag.querySelector('.gx')
+    const btnMin = frag.querySelector('.gmin')
+    const btnMax = frag.querySelector('.gmax')
+    const minOverlay = frag.querySelector('.gminOverlay')
 
     const isBrowser = isBrowserProcess(win.process)
     titleEl.textContent = win.title || win.process || 'پنجره'
@@ -126,7 +129,7 @@
     const g = {
       el, handle: win.handle, title: win.title, process: win.process, icon: win.icon,
       isBrowser, refWidth: (win.managed && win.managed.refWidth) || 1280,
-      x, y, w, h, zoomSteps: 0
+      x, y, w, h, zoomSteps: 0, minimized: false, maxState: null
     }
 
     if (isBrowser) {
@@ -147,6 +150,45 @@
       e.stopPropagation()
       removeGhost(g.handle)
     })
+
+    btnMin.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      g.minimized = true
+      el.classList.add('minimized')
+      minOverlay.hidden = false
+      try { await window.puzzle.winMinimize(g.handle) } catch (_) {}
+    })
+
+    minOverlay.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      g.minimized = false
+      el.classList.remove('minimized')
+      minOverlay.hidden = true
+      try { await window.puzzle.winFocus(g.handle) } catch (_) {}
+    })
+
+    btnMax.addEventListener('click', async (e) => {
+      e.stopPropagation()
+      if (!g.maxState) {
+        g.maxState = { x: g.x, y: g.y, w: g.w, h: g.h }
+        g.x = 0; g.y = 0; g.w = state.vb.w; g.h = state.vb.h
+        el.classList.add('gmaximized')
+      } else {
+        const prev = g.maxState
+        g.maxState = null
+        g.x = prev.x; g.y = prev.y; g.w = prev.w; g.h = prev.h
+        el.classList.remove('gmaximized')
+      }
+      el.style.left = g.x + 'px'; el.style.top = g.y + 'px'
+      el.style.width = g.w + 'px'; el.style.height = g.h + 'px'
+      await applyMove(g)
+      if (g.isBrowser) await applyZoomFor(g)
+      schedulePersist()
+    })
+
+    // جلوگیری از شروعِ کشیدن (drag) هنگام کلیک روی دکمه‌های نوارِ عنوان
+    el.querySelector('.gcaps').addEventListener('pointerdown', (e) => e.stopPropagation())
+    refSel.addEventListener('pointerdown', (e) => e.stopPropagation())
 
     bindDragResize(el, g)
 

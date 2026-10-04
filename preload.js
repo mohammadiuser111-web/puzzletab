@@ -24,6 +24,7 @@ const api = {
   winMove: (items) => ipcRenderer.invoke('winctl:move', items),
   winZoom: (handle, steps) => ipcRenderer.invoke('winctl:zoom', handle, steps),
   winFocus: (handle) => ipcRenderer.invoke('winctl:focus', handle),
+  winMinimize: (handle) => ipcRenderer.invoke('winctl:minimize', handle),
 
   /* چیدمان مدیریت‌شده (پایدار) */
   loadManaged: () => ipcRenderer.invoke('managed:load'),

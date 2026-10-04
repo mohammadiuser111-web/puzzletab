@@ -1,5 +1,6 @@
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace WinMirror;
@@ -231,8 +232,52 @@ public class MirrorForm : Form
         g.DrawRectangle(pen, rect);
     }
 
+    // هنگامِ کشیدنِ لبه/گوشهٔ کادر توسطِ کاربر، اندازهٔ جدید را طوری محدود می‌کنیم که نسبتِ
+    // تصویرِ محتوا (عرض به ارتفاعِ ناحیهٔ داخلیِ منهایِ کادر) همیشه با نسبتِ تصویرِ خودِ پنجرهٔ
+    // واقعیِ پارک‌شده یکی بماند — در غیرِ این صورت DWM Thumbnail محتوا را غیریکنواخت (فشرده/
+    // کِش‌آمده) مقیاس می‌دهد چون طول و عرض را جدا از هم تغییر می‌دهیم.
+    void AdjustSizingRect(int edge, IntPtr lParam)
+    {
+        var src = GetSourceClientRectSafe();
+        if (src.W <= 0 || src.H <= 0) return;
+        double aspect = (double)src.W / src.H; // عرض/ارتفاعِ محتوا
+
+        var rect = Marshal.PtrToStructure<RECT>(lParam);
+        int curW = rect.Right - rect.Left;
+        int curH = rect.Bottom - rect.Top;
+        int contentW = Math.Max(1, curW - 2 * BORDER);
+        int contentH = Math.Max(1, curH - 2 * BORDER);
+
+        const int WMSZ_LEFT = 1, WMSZ_RIGHT = 2, WMSZ_TOPLEFT = 4,
+                   WMSZ_TOPRIGHT = 5, WMSZ_BOTTOMLEFT = 7, WMSZ_BOTTOMRIGHT = 8;
+
+        bool deriveHeightFromWidth = edge == WMSZ_LEFT || edge == WMSZ_RIGHT
+            || edge == WMSZ_TOPLEFT || edge == WMSZ_TOPRIGHT || edge == WMSZ_BOTTOMLEFT || edge == WMSZ_BOTTOMRIGHT;
+
+        if (deriveHeightFromWidth)
+        {
+            int newH = (int)Math.Round(contentW / aspect) + 2 * BORDER;
+            if (edge == WMSZ_TOPLEFT || edge == WMSZ_TOPRIGHT) rect.Top = rect.Bottom - newH;
+            else rect.Bottom = rect.Top + newH;
+        }
+        else
+        {
+            int newW = (int)Math.Round(contentH * aspect) + 2 * BORDER;
+            rect.Right = rect.Left + newW;
+        }
+
+        Marshal.StructureToPtr(rect, lParam, true);
+    }
+
     protected override void WndProc(ref Message m)
     {
+        const int WM_SIZING = 0x0214;
+        if (m.Msg == WM_SIZING)
+        {
+            AdjustSizingRect(m.WParam.ToInt32(), m.LParam);
+            base.WndProc(ref m);
+            return;
+        }
         const int WM_NCHITTEST = 0x0084;
         if (m.Msg == WM_NCHITTEST)
         {

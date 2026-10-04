@@ -85,12 +85,15 @@ static class Program
     const int PARK_H = 900;
 
     // به‌جایِ خارج‌کردنِ کاملِ پنجره از مرزهای مانیتور (که باعثِ توقفِ رندرِ برنامه‌های مبتنی بر
-    // GPU می‌شد)، آن را روی خودِ مانیتورِ اصلی، در اندازهٔ ثابتِ مرجع نگه می‌داریم.
-    static (int X, int Y, int W, int H) GetParkBounds()
+    // GPU می‌شد)، آن را روی خودِ مانیتورِ اصلی، در اندازهٔ واقعیِ خودِ پنجره (نه یک اندازهٔ ثابتِ
+    // جهانی) نگه می‌داریم — این‌طوری هم از ریفلوی ناخواسته جلوگیری می‌شود و هم نسبتِ تصویر با
+    // چیزی که کاربر قبلاً روی صفحه می‌دید یکی می‌ماند (باعثِ جلوگیری از «فشرده/کِش‌آمده» دیده شدنِ
+    // آینه هنگامِ مقیاس‌دهیِ DWM Thumbnail می‌شود).
+    static (int X, int Y, int W, int H) GetParkBounds(int desiredW, int desiredH)
     {
         var b = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, PARK_W, PARK_H);
-        int w = Math.Min(PARK_W, Math.Max(200, b.Width));
-        int h = Math.Min(PARK_H, Math.Max(200, b.Height));
+        int w = Math.Min(Math.Max(200, desiredW), Math.Max(200, b.Width));
+        int h = Math.Min(Math.Max(150, desiredH), Math.Max(150, b.Height));
         return (b.Left, b.Top, w, h);
     }
 
@@ -130,10 +133,11 @@ static class Program
 
         // پارک‌کردن پنجرهٔ واقعی: نامرئی/کلیک‌ناپذیرش می‌کنیم ولی روی خودِ مانیتورِ واقعی،
         // در اندازهٔ ثابتِ مرجع (۱۰۰٪) نگه‌اش می‌داریم — از این به بعد دیگر هیچ‌وقت لازم نیست
-        // اندازه‌اش را تغییر بدهیم؛ فقط آینه (مقصد) تغییر اندازه می‌دهد.
+        // اندازه‌اش را تغییر بدهیم؛ فقط آینه (مقصد) تغییر اندازه می‌دهد. اندازهٔ مرجع را از
+        // رویِ خودِ اندازهٔ فعلیِ پنجره می‌گیریم (نه یک مقدارِ ثابتِ جهانی) تا نسبتِ تصویر حفظ شود.
         if (Native.IsIconic(src)) Native.ShowWindow(src, Native.SW_RESTORE);
         MakeInvisibleButAlive(src);
-        var park = GetParkBounds();
+        var park = GetParkBounds(originalRect.W, originalRect.H);
         Native.SetWindowPos(src, Native.HWND_BOTTOM, park.X, park.Y, park.W, park.H, Native.SWP_NOACTIVATE);
 
         var form = new MirrorForm(id, src, originalRect, proc);

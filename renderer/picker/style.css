@@ -1,7 +1,11 @@
 * { box-sizing: border-box; }
+@font-face { font-family: 'Rubik'; font-weight: 400; src: url('../../assets/fonts/Rubik-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 500; src: url('../../assets/fonts/Rubik-Medium.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 600; src: url('../../assets/fonts/Rubik-SemiBold.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 700; src: url('../../assets/fonts/Rubik-Bold.ttf') format('truetype'); font-display: swap; }
 html, body { height: 100%; margin: 0; background: transparent; overflow: hidden; }
 body {
-  font-family: "Segoe UI Variable Text", "Segoe UI", "Vazirmatn", Tahoma, sans-serif;
+  font-family: 'Rubik', "Segoe UI Variable Text", "Segoe UI", Tahoma, sans-serif;
   -webkit-font-smoothing: antialiased;
   user-select: none;
 }
@@ -41,6 +45,8 @@ html[data-theme="light"] {
   overflow: hidden;
 }
 
+svg.ic, .iconbtn svg, .x svg, .btn svg { width: 14px; height: 14px; display: inline-block; vertical-align: middle; flex: none; }
+.drag b { display: flex; align-items: center; gap: 8px; }
 .drag {
   -webkit-app-region: drag;
   height: 44px; flex: none;
@@ -51,8 +57,8 @@ html[data-theme="light"] {
 .x {
   -webkit-app-region: no-drag;
   width: 32px; height: 32px; border: 0; border-radius: 6px;
-  background: transparent; color: var(--text-2); font-size: 13px;
-  cursor: pointer;
+  background: transparent; color: var(--text-2);
+  cursor: pointer; display: grid; place-items: center;
 }
 .x:hover { background: #c42b1c; color: #fff; }
 
@@ -69,7 +75,7 @@ html[data-theme="light"] {
 .iconbtn {
   width: 34px; height: 34px; border-radius: 6px;
   border: 1px solid var(--stroke); background: var(--field);
-  color: var(--text); cursor: pointer; font-size: 14px;
+  color: var(--text); cursor: pointer; display: grid; place-items: center;
 }
 .iconbtn:hover { background: var(--hover); }
 
@@ -92,6 +98,7 @@ html[data-theme="light"] {
   font-size: 13px; color: var(--text-2);
 }
 .row .ic img { width: 100%; height: 100%; object-fit: contain; }
+.row .ic svg { width: 65%; height: 65%; color: var(--text-3); }
 .row .meta { flex: 1; min-width: 0; }
 .row .ttl { font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .proc { font-size: 11px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -107,6 +114,7 @@ html[data-theme="light"] {
   height: 34px; padding: 0 16px; border-radius: 6px;
   border: 1px solid var(--stroke); background: var(--hover);
   color: var(--text); font: inherit; font-size: 13px; cursor: pointer;
+  display: inline-flex; align-items: center; gap: 6px;
 }
 .btn.primary { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
 .btn:disabled { opacity: .45; cursor: default; }

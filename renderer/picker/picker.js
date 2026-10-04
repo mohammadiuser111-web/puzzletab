@@ -90,7 +90,8 @@
     items.forEach((w) => {
       const row = document.createElement('div')
       row.className = 'row'
-      const iconHtml = w.icon ? '<img src="data:image/png;base64,' + w.icon + '">' : '🗔'
+      const fallbackSvg = '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="1.2" fill="none" stroke="currentColor" stroke-width="1.1"/><line x1="1.5" y1="5.3" x2="14.5" y2="5.3" stroke="currentColor" stroke-width="1.1"/></svg>'
+      const iconHtml = w.icon ? '<img src="data:image/png;base64,' + w.icon + '">' : fallbackSvg
       row.innerHTML =
         '<input type="checkbox">' +
         '<span class="ic">' + iconHtml + '</span>' +

@@ -315,14 +315,21 @@ function notify (title, body) {
 
 function buildTrayMenu () {
   const loginSettings = process.platform === 'win32' ? app.getLoginItemSettings() : { openAtLogin: false }
+  const icon = (name) => {
+    try {
+      const p = path.join(__dirname, 'assets', 'icons', name + '16.png')
+      const img = nativeImage.createFromPath(p)
+      return img.isEmpty() ? undefined : img
+    } catch (_) { return undefined }
+  }
   return Menu.buildFromTemplate([
     { label: 'پازل‌تب' + (winctl.isMock ? '  (حالت آزمایشی/غیر ویندوز)' : ''), enabled: false },
     { type: 'separator' },
-    { label: '🧩 چیدمان پنجره‌های باز…', click: () => createPickerWindow() },
-    { label: '↻ اعمال آخرین چیدمان', click: () => applyLastManagedLayout() },
-    { label: '🔍 بازنشانی زوم مرورگرها', click: () => resetAllZoom() },
+    { label: 'چیدمان پنجره‌های باز…', icon: icon('layout'), click: () => createPickerWindow() },
+    { label: 'اعمال آخرین چیدمان', icon: icon('restore'), click: () => applyLastManagedLayout() },
+    { label: 'بازنشانی زوم مرورگرها', icon: icon('zoom-reset'), click: () => resetAllZoom() },
     { type: 'separator' },
-    { label: '🗂 حالت کاشی‌های داخلی (تب‌های سایت در یک پنجره)', click: () => createEmbeddedWindow() },
+    { label: 'حالت کاشی‌های داخلی (تب‌های سایت در یک پنجره)', icon: icon('tiles'), click: () => createEmbeddedWindow() },
     { type: 'separator' },
     {
       label: 'اجرا هنگام ورود به ویندوز',
@@ -331,7 +338,7 @@ function buildTrayMenu () {
       click: (item) => { if (process.platform === 'win32') app.setLoginItemSettings({ openAtLogin: item.checked }) }
     },
     { type: 'separator' },
-    { label: 'خروج از پازل‌تب', click: () => { app.quit() } }
+    { label: 'خروج از پازل‌تب', icon: icon('exit'), click: () => { app.quit() } }
   ])
 }
 

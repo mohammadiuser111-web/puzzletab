@@ -10,10 +10,22 @@
   <div id="canvas">
     <div id="monitors"></div>
     <div id="pill">
-      <span class="pillTitle">🧩 حالت چیدمان — پنجره‌ها را بکش/تغییر اندازه بده</span>
-      <button id="btnAddMore" class="pillBtn">+ افزودن پنجره</button>
-      <button id="btnResetZoom" class="pillBtn">بازنشانی زوم</button>
-      <button id="btnDone" class="pillBtn done">پایان (Esc)</button>
+      <span class="pillTitle">
+        <svg class="ic" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.2"><rect x="1" y="1" width="6.2" height="6.2" rx="1"/><rect x="8.8" y="1" width="6.2" height="4.2" rx="1"/><rect x="8.8" y="6.3" width="6.2" height="8.7" rx="1"/><rect x="1" y="8.3" width="6.2" height="6.7" rx="1"/></g></svg>
+        حالت چیدمان — پنجره‌ها را بکش/تغییر اندازه بده
+      </span>
+      <button id="btnAddMore" class="pillBtn">
+        <svg class="ic" viewBox="0 0 16 16"><path d="M8 2v12M2 8h12" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>
+        افزودن پنجره
+      </button>
+      <button id="btnResetZoom" class="pillBtn">
+        <svg class="ic" viewBox="0 0 16 16"><g fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="6.8" cy="6.8" r="4.6"/><line x1="10.2" y1="10.2" x2="14.5" y2="14.5" stroke-linecap="round"/><line x1="4.6" y1="6.8" x2="9" y2="6.8" stroke-linecap="round"/></g></svg>
+        بازنشانی زوم
+      </button>
+      <button id="btnDone" class="pillBtn done">
+        <svg class="ic" viewBox="0 0 16 16"><path d="M3 8.5l3.2 3.2L13 5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        پایان (Esc)
+      </button>
     </div>
     <div id="empty" hidden>
       <div class="emptyBox">هیچ پنجره‌ای انتخاب نشده. Esc را بزن و دوباره از ترِی «چیدمان پنجره‌های باز» را انتخاب کن.</div>

@@ -2,10 +2,15 @@
 
 * { box-sizing: border-box; }
 
+@font-face { font-family: 'Rubik'; font-weight: 400; src: url('../assets/fonts/Rubik-Regular.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 500; src: url('../assets/fonts/Rubik-Medium.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 600; src: url('../assets/fonts/Rubik-SemiBold.ttf') format('truetype'); font-display: swap; }
+@font-face { font-family: 'Rubik'; font-weight: 700; src: url('../assets/fonts/Rubik-Bold.ttf') format('truetype'); font-display: swap; }
+
 :root {
   --accent: #0078d4;
   --accent-soft: rgba(0, 120, 212, .25);
-  --font: "Segoe UI Variable Text", "Segoe UI", "Vazirmatn", Tahoma, "Iranian Sans", sans-serif;
+  --font: 'Rubik', "Segoe UI Variable Text", "Segoe UI", Tahoma, sans-serif;
   --radius: 8px;
   --radius-s: 5px;
   --wv-bg: #fff;
@@ -388,6 +393,7 @@ body.interacting .tile.dragging, body.interacting .tile.resizing { box-shadow: v
 }
 .tile-error[hidden] { display: none; }
 .err-icon { font-size: 40px; }
+.err-icon svg { width: 40px; height: 40px; color: #d8822b; }
 .err-msg { color: var(--text-2); font-size: 13px; word-break: break-word; max-width: 90%; }
 .err-actions { display: flex; gap: 8px; }
 

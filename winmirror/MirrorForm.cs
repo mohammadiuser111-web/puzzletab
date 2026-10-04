@@ -57,10 +57,11 @@ public class MirrorForm : Form
         KeyPress += OnKeyPress;
         Enter += (_, __) => { _focused = true; Invalidate(); };
         Leave += (_, __) => { _focused = false; Invalidate(); };
+        MouseLeave += (_, __) => ShowRealCursorIfHidden();
         Paint += OnPaint;
         Resize += (_, __) => UpdateThumbRect();
         Move += (_, __) => Program.ReportMoved(this);
-        FormClosed += (_, __) => { StopWatchdog(); UnregisterThumb(); };
+        FormClosed += (_, __) => { ShowRealCursorIfHidden(); StopWatchdog(); UnregisterThumb(); };
     }
 
     public void SetAccent(Color c) { _accent = c; Invalidate(); }
@@ -162,8 +163,12 @@ public class MirrorForm : Form
         EnsureSourceFocused();
         if (e.Button == MouseButtons.Right) _rightDown = true; else _leftDown = true;
         Capture = true; // تا پایانِ درگ، حتی اگر موس از مرزِ کادر بیرون برود، رویدادها را دریافت کنیم
+        UpdateCustomCursor(e.X, e.Y);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONDOWN : Native.WM_LBUTTONDOWN;
-        SendMouseMessageWithCursorSync(msg, e.X, e.Y, CurrentButtonFlags());
+        SyncRealCursorToSource(e.X, e.Y);
+        var (sx, sy) = ToSourceClient(e.X, e.Y);
+        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), Native.MakeLParam(sx, sy));
+        System.Threading.Thread.Sleep(15); // فرصت برای پردازشِ کلیک (مثلاً بازکردنِ پنلِ گیف) پیش از ادامهٔ رویدادها
     }
 
     void OnMouseUp(object? sender, MouseEventArgs e)
@@ -173,59 +178,88 @@ public class MirrorForm : Form
         if (e.Button == MouseButtons.Right) _rightDown = false; else _leftDown = false;
         if (!_leftDown && !_rightDown) Capture = false;
         var (cx, cy) = ClampToContentArea(e.X, e.Y);
+        UpdateCustomCursor(cx, cy);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONUP : Native.WM_LBUTTONUP;
-        SendMouseMessageWithCursorSync(msg, cx, cy, CurrentButtonFlags());
+        SyncRealCursorToSource(cx, cy);
+        var (sx, sy) = ToSourceClient(cx, cy);
+        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), Native.MakeLParam(sx, sy));
     }
 
-    // تلگرام (مثلِ بیشترِ اپ‌هایِ ساخته‌شده با Qt) برای تصمیم‌گیریِ «کلیک بیرونِ پنل رخ داد، پس
-    // پنل را ببند» (مثلِ پنلِ گیف/استیکر)، به موقعیتِ واقعیِ نشانگرِ موسِ کلِ سیستم نگاه می‌کند —
-    // نه فقط به پیامِ کلیکی که ما مستقیماً به پنجره می‌فرستیم. چون نشانگرِ واقعیِ کاربر همیشه روی
-    // خودِ کادرِ آینه می‌ماند (نه روی پنجرهٔ واقعیِ پارک‌شده که جایِ دیگری از صفحه نشسته)، از دیدِ
-    // تلگرام همیشه به‌نظر می‌رسد کلیک «بیرون از پنل» رخ داده — برای همین پنل‌هایی مثلِ گیف/استیکر
-    // بلافاصله بعد از باز شدن دوباره بسته می‌شوند (مثلِ چشمک‌زدنِ یک لامپ).
-    // راه‌حل: درستِ دورِ لحظهٔ ارسالِ خودِ کلیک، نشانگرِ واقعیِ سیستم را موقتاً به مکانِ متناظرِ
-    // روی پنجرهٔ واقعی می‌بریم، کلیک را می‌فرستیم، کمی صبر می‌کنیم تا ریسهٔ برنامهٔ مقصد پیام را
-    // پردازش کند، و بعد نشانگر را به مکانِ بصریِ درستش (همان‌جا که کاربر واقعاً موس را نگه داشته)
-    // برمی‌گردانیم — تا هم تلگرام کلیک را «داخلِ» خودش ببیند و هم تجربهٔ کاربر در آینه دست‌نخورده
-    // بماند.
-    void SendMouseMessageWithCursorSync(uint msg, int localX, int localY, IntPtr wParam)
+    // تلگرام (مثلِ بیشترِ اپ‌هایِ ساخته‌شده با Qt) برای تصمیم‌گیریِ «موس بیرونِ پنل است، پس باید
+    // بسته شوم» (مثلِ پنلِ گیف/استیکر)، نه فقط لحظهٔ کلیک بلکه به‌طور پیوسته به موقعیتِ واقعیِ
+    // نشانگرِ موسِ کلِ سیستم (GetCursorPos) نگاه می‌کند. چون نشانگرِ واقعیِ کاربر همیشه روی خودِ
+    // کادرِ آینه می‌ماند (نه روی پنجرهٔ واقعیِ پارک‌شده که جایِ دیگری از صفحه نشسته)، از دیدِ
+    // تلگرام همیشه به‌نظر می‌رسید موس «بیرونِ پنل» است — برای همین پنل بلافاصله بسته می‌شد، حتی
+    // اگر فقط لحظهٔ کلیک را همگام می‌کردیم و بعد نشانگر را به آینه برمی‌گرداندیم.
+    // راه‌حل: تا وقتی موس داخلِ ناحیهٔ محتوایِ آینه است، نشانگرِ واقعیِ سیستم را مخفی می‌کنیم و
+    // به‌جایش خودمان یک نشانگرِ ساختگی را دقیقاً در همان مکانِ محلی رسم می‌کنیم؛ و هم‌زمان، پشتِ
+    // صحنه، نشانگرِ واقعیِ سیستم را پیوسته (نه فقط لحظهٔ کلیک) روی مکانِ متناظرش در پنجرهٔ واقعی
+    // نگه می‌داریم — طوری که از دیدِ تلگرام، موس همیشه واقعاً «روی خودش» است.
+    bool _cursorHidden;
+    Point _cursorDrawPos = new Point(-100, -100);
+
+    void HideRealCursorIfVisible()
+    {
+        if (_cursorHidden) return;
+        Cursor.Hide();
+        _cursorHidden = true;
+    }
+
+    void ShowRealCursorIfHidden()
+    {
+        if (!_cursorHidden) return;
+        Cursor.Show();
+        _cursorHidden = false;
+        Invalidate(new Rectangle(_cursorDrawPos.X - 2, _cursorDrawPos.Y - 2, 16, 22));
+    }
+
+    void UpdateCustomCursor(int localX, int localY)
+    {
+        HideRealCursorIfVisible();
+        var old = _cursorDrawPos;
+        _cursorDrawPos = new Point(localX, localY);
+        Invalidate(new Rectangle(old.X - 2, old.Y - 2, 16, 22));
+        Invalidate(new Rectangle(_cursorDrawPos.X - 2, _cursorDrawPos.Y - 2, 16, 22));
+    }
+
+    void SyncRealCursorToSource(int localX, int localY)
     {
         var (sx, sy) = ToSourceClient(localX, localY);
         var pt = new POINT { X = sx, Y = sy };
         Native.ClientToScreen(SourceHandle, ref pt);
-        var lp = Native.MakeLParam(sx, sy);
-        var visualScreenPt = PointToScreen(new Point(localX, localY));
-
         Native.SetCursorPos(pt.X, pt.Y);
-        Native.PostMessage(SourceHandle, msg, wParam, lp);
-        System.Threading.Thread.Sleep(15);
-        Native.SetCursorPos(visualScreenPt.X, visualScreenPt.Y);
     }
 
     void OnMouseMove(object? sender, MouseEventArgs e)
     {
         bool dragging = _leftDown || _rightDown;
-        if (!InContentArea(e.X, e.Y) && !dragging) return;
+        if (!InContentArea(e.X, e.Y) && !dragging)
+        {
+            ShowRealCursorIfHidden();
+            return;
+        }
         var (cx, cy) = dragging ? ClampToContentArea(e.X, e.Y) : (e.X, e.Y);
+        UpdateCustomCursor(cx, cy);
         var (sx, sy) = ToSourceClient(cx, cy);
         var lp = Native.MakeLParam(sx, sy);
         Native.PostMessage(SourceHandle, Native.WM_MOUSEMOVE, CurrentButtonFlags(), lp);
+        // نشانگرِ واقعیِ سیستم را هم‌زمان با هر حرکت (نه فقط کلیک) روی پنجرهٔ واقعی نگه می‌داریم —
+        // چون بسته‌شدنِ پنل‌های تلگرام به‌صورتِ پیوسته، نه فقط لحظهٔ کلیک، چک می‌شود.
+        SyncRealCursorToSource(cx, cy);
     }
 
 
     void OnMouseWheel(object? sender, MouseEventArgs e)
     {
         if (!InContentArea(e.X, e.Y)) return;
+        UpdateCustomCursor(e.X, e.Y);
         var (sx, sy) = ToSourceClient(e.X, e.Y);
         var pt = new POINT { X = sx, Y = sy };
         Native.ClientToScreen(SourceHandle, ref pt); // WM_MOUSEWHEEL از مختصاتِ صفحه استفاده می‌کند
         var lp = Native.MakeLParam(pt.X, pt.Y);
         var wp = (IntPtr)((e.Delta << 16) & unchecked((int)0xFFFF0000));
-        var visualScreenPt = PointToScreen(new Point(e.X, e.Y));
         Native.SetCursorPos(pt.X, pt.Y);
         Native.PostMessage(SourceHandle, Native.WM_MOUSEWHEEL, wp, lp);
-        System.Threading.Thread.Sleep(15);
-        Native.SetCursorPos(visualScreenPt.X, visualScreenPt.Y);
     }
 
     bool _suppressDeactivateReset;
@@ -245,6 +279,9 @@ public class MirrorForm : Form
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
+        // اگر پنجره غیرفعال شود (چه به‌خاطرِ کارِ خودمان، چه واقعاً)، برایِ احتیاط نشانگرِ واقعی را
+        // برمی‌گردانیم — وگرنه اگر کاربر با Alt+Tab برود جایِ دیگر، موسِ سیستم مخفی می‌ماند.
+        ShowRealCursorIfHidden();
         if (_suppressDeactivateReset)
         {
             // این غیرفعال‌شدن به‌خاطرِ فوکوس‌دادنِ عمدیِ خودِ ما به پنجرهٔ واقعی بود (در
@@ -304,6 +341,26 @@ public class MirrorForm : Form
         using var pen = new Pen(_focused ? _accent : Color.FromArgb(140, _accent), 2);
         var rect = new Rectangle(1, 1, ClientSize.Width - 3, ClientSize.Height - 3);
         g.DrawRectangle(pen, rect);
+
+        if (_cursorHidden) DrawCustomCursor(g);
+    }
+
+    // چون وقتی موس داخلِ ناحیهٔ محتواست نشانگرِ واقعیِ سیستم را مخفی می‌کنیم (نگاهِ EnsureSourceFocused
+    // و SyncRealCursorToSource بالاتر)، باید خودمان یک نشانگرِ جایگزین بکشیم تا کاربر همچنان ببیند
+    // موسش کجاست — شکلی مشابهِ پیکانِ معمولیِ ویندوز (سفید با حاشیهٔ مشکی).
+    void DrawCustomCursor(Graphics g)
+    {
+        int x = _cursorDrawPos.X, y = _cursorDrawPos.Y;
+        var pts = new[]
+        {
+            new Point(x, y), new Point(x, y + 13), new Point(x + 3, y + 10),
+            new Point(x + 5, y + 15), new Point(x + 7, y + 14), new Point(x + 5, y + 9),
+            new Point(x + 9, y + 9)
+        };
+        using var fill = new SolidBrush(Color.White);
+        using var outline = new Pen(Color.Black, 1);
+        g.FillPolygon(fill, pts);
+        g.DrawPolygon(outline, pts);
     }
 
     // هنگامِ کشیدنِ لبه/گوشهٔ کادر توسطِ کاربر، اندازهٔ جدید را طوری محدود می‌کنیم که نسبتِ

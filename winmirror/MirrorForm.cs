@@ -156,6 +156,10 @@ public class MirrorForm : Form
     {
         if (!InContentArea(e.X, e.Y)) return;
         Focus();
+        // باید پنجرهٔ واقعی را قبل از فرستادنِ خودِ کلیک فعال/فورگراند کنیم، نه فقط موقعِ تایپ —
+        // وگرنه کلیک روی فیلدِ متن (برایِ فوکوس‌کردنِ آن) وقتی پنجره هنوز فورگراند نیست به‌درستی
+        // پردازش نمی‌شود، و بعداً با اولین کلید هم همان فیلد واقعاً فوکوس ندارد (نمی‌شد تایپ کرد).
+        EnsureSourceFocused();
         if (e.Button == MouseButtons.Right) _rightDown = true; else _leftDown = true;
         Capture = true; // تا پایانِ درگ، حتی اگر موس از مرزِ کادر بیرون برود، رویدادها را دریافت کنیم
         var (sx, sy) = ToSourceClient(e.X, e.Y);

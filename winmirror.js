@@ -43,15 +43,27 @@ class RealBackend extends EventEmitter {
       const rl = readline.createInterface({ input: child.stdout })
       rl.on('line', (line) => this._onLine(line))
       child.stderr.on('data', (d) => console.error('[winmirror:stderr]', String(d)))
+      // نکته‌ی حیاتی: spawn با مسیرِ نامعتبر (ENOENT) را Node به‌صورت async و فقط از طریقِ
+      // رویدادِ 'error' گزارش می‌دهد نه throw همزمان؛ بدون شنونده روی این رویداد، کل پردازه
+      // (main process) با "Uncaught Exception" از بین می‌رود. این شنونده از آن جلوگیری می‌کند
+      // و به‌جایش فقط آینه‌سازی را غیرفعال می‌کند (بدون کرشِ برنامه).
+      let settled = false
+      child.on('error', (err) => {
+        console.error('[winmirror] spawn error:', err && err.message)
+        this.proc = null
+        for (const p of this.pending.splice(0)) p.reject(err)
+        if (!settled) { settled = true; clearTimeout(timer); reject(err) }
+        this.emit('spawn-error', err)
+      })
       child.on('exit', (code) => {
         console.error('[winmirror] process exited, code=', code)
         this.proc = null
         for (const p of this.pending.splice(0)) p.reject(new Error('winmirror exited'))
         this.emit('exit', code)
       })
-      const onReady = () => { clearTimeout(timer); resolve(true) }
+      const onReady = () => { settled = true; clearTimeout(timer); resolve(true) }
       this.once('ready', onReady)
-      const timer = setTimeout(() => { this.off('ready', onReady); reject(new Error('winmirror startup timeout')) }, 8000)
+      const timer = setTimeout(() => { this.off('ready', onReady); settled = true; reject(new Error('winmirror startup timeout')) }, 8000)
     })
     return this.starting
   }

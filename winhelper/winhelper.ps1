@@ -103,11 +103,11 @@ function Get-WindowInfo([IntPtr]$h) {
   $sb = New-Object System.Text.StringBuilder 512
   [WinAPI]::GetWindowText($h, $sb, 512) | Out-Null
   $title = $sb.ToString()
-  $pid = 0
-  [WinAPI]::GetWindowThreadProcessId($h, [ref]$pid) | Out-Null
+  $procId = 0
+  [WinAPI]::GetWindowThreadProcessId($h, [ref]$procId) | Out-Null
   $procName = ''; $exePath = ''
   try {
-    $p = Get-Process -Id $pid -ErrorAction Stop
+    $p = Get-Process -Id $procId -ErrorAction Stop
     $procName = $p.ProcessName
     try { $exePath = $p.MainModule.FileName } catch { $exePath = '' }
   } catch {}
@@ -115,7 +115,7 @@ function Get-WindowInfo([IntPtr]$h) {
   [PSCustomObject]@{
     handle   = [int64]$h
     title    = $title
-    pid      = $pid
+    pid      = $procId
     process  = $procName
     exePath  = $exePath
     x        = $rect.Left

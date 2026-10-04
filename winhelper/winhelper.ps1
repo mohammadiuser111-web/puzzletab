@@ -3,7 +3,7 @@
 # دستورها: list | rect | move | zoom | focus
 
 param(
-  [Parameter(Mandatory = $true)][ValidateSet('list', 'rect', 'move', 'zoom', 'focus', 'minimize')][string]$Cmd,
+  [Parameter(Mandatory = $true)][ValidateSet('list', 'rect', 'move', 'zoom', 'focus', 'minimize', 'foreground')][string]$Cmd,
   [string]$Handle,
   [int]$X,
   [int]$Y,
@@ -38,6 +38,7 @@ public class WinAPI {
     [DllImport("user32.dll")] public static extern bool SetWindowPos(IntPtr hWnd, IntPtr hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
     [DllImport("user32.dll")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
     [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+    [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -262,6 +263,12 @@ function Cmd-Minimize {
   return @{ ok = [bool]$ok }
 }
 
+function Cmd-Foreground {
+  $h = [WinAPI]::GetForegroundWindow()
+  if ($h -eq [IntPtr]::Zero) { return @{ ok = $false; error = 'no foreground window' } }
+  return @{ ok = $true; window = (Get-WindowInfo $h) }
+}
+
 try {
   switch ($Cmd) {
     'list'     { $r = Cmd-List }
@@ -270,6 +277,7 @@ try {
     'zoom'     { $r = Cmd-Zoom }
     'focus'    { $r = Cmd-Focus }
     'minimize' { $r = Cmd-Minimize }
+    'foreground' { $r = Cmd-Foreground }
   }
   $r | ConvertTo-Json -Depth 6 -Compress
 } catch {

@@ -8,12 +8,15 @@ const path = require('path')
 const fs = require('fs')
 const os = require('os')
 const winctl = require('./winctl')
+const winmirror = require('./winmirror')
 
 winctl.init(app)
+winmirror.init(app)
 
 const IS_SELFTEST = process.argv.includes('--selftest')
 const IS_SELFTEST_OVERLAY = process.argv.includes('--selftest-overlay')
 const IS_SELFTEST_AUTOSCALE = process.argv.includes('--selftest-autoscale')
+const IS_SELFTEST_MIRROR = process.argv.includes('--selftest-mirror')
 
 let tray = null
 let embeddedWin = null /* پنجرهٔ قدیمی: کاشی‌های سایت داخل برنامه */
@@ -365,6 +368,66 @@ function notify (title, body) {
   } catch (_) { console.log('[notify]', title, '-', body) }
 }
 
+/* ================= آینه‌سازیِ دقیقِ پنجره (Ctrl+Alt+M) =================
+ * برخلاف نگهبان مقیاسِ خودکار (که با زوم کلیدی فقط *محتوا* را جبران می‌کند)، این حالت کل پنجره
+ * (نوار تب/آدرس را هم همراه با محتوا) را عیناً مثل یک عکس کوچک‌شده نشان می‌دهد — دقیقاً مثل دورکردن
+ * یک گوشی از جلوی چشم. پنجرهٔ واقعی خارج از صفحه، در اندازهٔ ثابتِ ۱۰۰٪، «پارک» می‌شود و با
+ * DWM Thumbnail یک آینهٔ زنده و کاملاً تعاملی (کلیک/اسکرول/تایپ) در هر جای صفحه نشان داده می‌شود.
+ * این یک حالتِ اختیاری و دستی است (با میان‌بر صفحه‌کلید فعال می‌شود)، نه خودکار روی همهٔ پنجره‌ها. */
+let mirrorNextId = 1
+const activeMirrors = new Map() // id -> { handle, process, title }
+let mirrorEngineStarted = false
+
+async function ensureMirrorEngine () {
+  if (mirrorEngineStarted) return true
+  await winmirror.backend.start()
+  mirrorEngineStarted = true
+  winmirror.backend.on('sourceLost', (ev) => {
+    activeMirrors.delete(ev.id)
+    notify('پنجره بسته شد', 'آینه به‌صورت خودکار حذف شد.')
+    refreshTrayMenu()
+  })
+  winmirror.backend.on('wantsRestore', async (ev) => {
+    await winmirror.backend.destroyMirror(ev.id, true).catch(() => {})
+    activeMirrors.delete(ev.id)
+    notify('پنجره بازگردانی شد', 'آینه بسته شد و پنجرهٔ واقعی به اندازهٔ اصلی‌اش برگشت.')
+    refreshTrayMenu()
+  })
+  winmirror.backend.on('exit', () => { mirrorEngineStarted = false; activeMirrors.clear(); refreshTrayMenu() })
+  return true
+}
+
+async function mirrorFocusedWindow () {
+  try {
+    await ensureMirrorEngine()
+  } catch (e) { notify('خطا در راه‌اندازیِ موتور آینه', e.message); return }
+
+  let fg
+  try { fg = await winctl.foreground() } catch (e) { notify('خطا', e.message); return }
+  if (!fg || !fg.ok || !fg.window) { notify('پنجرهٔ فعالی پیدا نشد', ''); return }
+  const w = fg.window
+
+  const id = mirrorNextId++
+  try {
+    await winmirror.backend.createMirror(id, w.handle, { x: w.x, y: w.y, w: w.w, h: w.h }, w.process)
+    activeMirrors.set(id, { handle: w.handle, process: w.process, title: w.title })
+    notify('آینه ساخته شد', (w.title || w.process) + ' — حالا لبهٔ کادر را بکشید تا هر اندازه که خواستید کوچک/بزرگ شود (دابل‌کلیک روی کادر = بازگردانی).')
+    refreshTrayMenu()
+  } catch (e) {
+    notify('ساخت آینه ناموفق بود', e.message)
+  }
+}
+
+async function restoreAllMirrors () {
+  const ids = Array.from(activeMirrors.keys())
+  for (const id of ids) {
+    await winmirror.backend.destroyMirror(id, true).catch(() => {})
+    activeMirrors.delete(id)
+  }
+  refreshTrayMenu()
+  if (ids.length) notify('بازگردانی شد', ids.length + ' آینه بسته شد و پنجره‌های واقعی به اندازهٔ اصلی برگشتند.')
+}
+
 function buildTrayMenu () {
   const loginSettings = process.platform === 'win32' ? app.getLoginItemSettings() : { openAtLogin: false }
   const icon = (name) => {
@@ -402,6 +465,16 @@ function buildTrayMenu () {
       ]
     },
     { label: 'بازنشانی زوم همه به ۱۰۰٪', icon: icon('zoom-reset'), click: () => resetAllZoom() },
+    { type: 'separator' },
+    {
+      label: activeMirrors.size ? `آینه‌سازیِ دقیق پنجره (${activeMirrors.size} فعال)` : 'آینه‌سازیِ دقیق پنجره',
+      submenu: [
+        { label: 'آینه‌کردن پنجرهٔ فعال اینجا  —  Ctrl+Alt+M', click: () => mirrorFocusedWindow() },
+        { label: 'بازگردانی همهٔ آینه‌ها', enabled: activeMirrors.size > 0, click: () => restoreAllMirrors() },
+        { type: 'separator' },
+        { label: 'کل پنجره (نوار تب/آدرس هم) عیناً مثل عکس کوچک می‌شود؛ لبهٔ نازکِ آینه را بکشید تا هر اندازه بخواهید تغییرش دهید؛ دابل‌کلیک روی لبه = بازگردانی.', enabled: false }
+      ]
+    },
     { type: 'separator' },
     { label: 'حالت کاشی‌های داخلی (تب‌های سایت در یک پنجره)', icon: icon('tiles'), click: () => createEmbeddedWindow() },
     {
@@ -547,6 +620,49 @@ async function runAutoscaleSelfTest () {
   app.exit(0)
 }
 
+/* ================= تست خودکار آینه‌سازیِ دقیق (Ctrl+Alt+M) با بک‌اند آزمایشیِ winmirror ================= */
+async function runMirrorSelfTest () {
+  const killer = setTimeout(() => { console.error('SELFTEST_TIMEOUT'); app.exit(2) }, 60000)
+  const fail = (msg) => { console.error('SELFTEST_FAILED:', msg); clearTimeout(killer); app.exit(1) }
+
+  // گام ۱: آینه‌کردن پنجرهٔ «فعال» (بک‌اند آزمایشیِ winctl همیشه chrome=1002 را به‌عنوان فعال برمی‌گرداند)
+  await mirrorFocusedWindow()
+  if (activeMirrors.size !== 1) return fail('باید دقیقاً یک آینه ساخته شده باشد')
+  const [[mirrorId, info]] = Array.from(activeMirrors.entries())
+  if (info.handle !== 1002 || info.process !== 'chrome') return fail('آینه باید روی پنجرهٔ فعال (chrome/1002) ساخته شده باشد')
+
+  const list1 = await winmirror.backend.list()
+  if (!list1.ok || list1.mirrors.length !== 1 || list1.mirrors[0].id !== mirrorId) return fail('لیست موتور آینه با وضعیت داخلی هم‌خوان نیست')
+  console.log('SELFTEST MIRROR CREATED:', JSON.stringify(list1.mirrors))
+
+  // گام ۲: شبیه‌سازیِ «دابل‌کلیک روی کادر» (درخواستِ بازگردانی) از سمتِ winmirror.exe
+  winmirror.backend.mockEmitEvent('wantsRestore', { id: mirrorId })
+  await new Promise((r) => setTimeout(r, 50))
+  if (activeMirrors.size !== 0) return fail('بعد از wantsRestore باید آینه حذف شده باشد')
+  const list2 = await winmirror.backend.list()
+  if (list2.mirrors.length !== 0) return fail('موتور آینه باید آینه را واقعاً حذف کرده باشد')
+
+  // گام ۳: دوباره بساز، این‌بار شبیه‌سازیِ بسته‌شدنِ پنجرهٔ منبع (sourceLost)
+  await mirrorFocusedWindow()
+  const [[mirrorId2]] = Array.from(activeMirrors.entries())
+  winmirror.backend.mockEmitEvent('sourceLost', { id: mirrorId2 })
+  await new Promise((r) => setTimeout(r, 50))
+  if (activeMirrors.size !== 0) return fail('بعد از sourceLost باید آینه از وضعیت داخلی حذف شده باشد')
+
+  // گام ۴: restoreAllMirrors باید همهٔ آینه‌های باقی‌مانده را ببندد
+  await mirrorFocusedWindow()
+  await mirrorFocusedWindow()
+  if (activeMirrors.size !== 2) return fail('باید دو آینه ساخته شده باشد')
+  await restoreAllMirrors()
+  if (activeMirrors.size !== 0) return fail('restoreAllMirrors باید همه را پاک کند')
+  const list3 = await winmirror.backend.list()
+  if (list3.mirrors.length !== 0) return fail('موتور آینه باید همه را واقعاً بسته باشد')
+
+  console.log('SELFTEST_MIRROR_DONE')
+  clearTimeout(killer)
+  app.exit(0)
+}
+
 /* ================= چرخهٔ حیات برنامه ================= */
 const gotLock = IS_SELFTEST || IS_SELFTEST_OVERLAY || IS_SELFTEST_AUTOSCALE || app.requestSingleInstanceLock()
 
@@ -559,6 +675,7 @@ if (!gotLock) {
     if (IS_SELFTEST) { try { await runSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
     if (IS_SELFTEST_OVERLAY) { try { await runOverlaySelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
     if (IS_SELFTEST_AUTOSCALE) { try { await runAutoscaleSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
+    if (IS_SELFTEST_MIRROR) { try { await runMirrorSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
 
     setupTray()
     startAutoscale()
@@ -568,11 +685,22 @@ if (!gotLock) {
         if (overlayWin && !overlayWin.isDestroyed()) closeOverlay()
         else createPickerWindow()
       })
+      globalShortcut.register('Control+Alt+M', () => mirrorFocusedWindow())
     } catch (_) {}
   })
 
   app.on('window-all-closed', () => {
     /* عمداً خالی: برنامه باید در System Tray زنده بماند، حتی وقتی هیچ پنجره‌ای باز نیست. */
   })
-  app.on('will-quit', () => { globalShortcut.unregisterAll(); stopAutoscale() })
+
+  let isShuttingDown = false
+  app.on('will-quit', (e) => {
+    globalShortcut.unregisterAll()
+    stopAutoscale()
+    if (mirrorEngineStarted && !isShuttingDown) {
+      isShuttingDown = true
+      e.preventDefault()
+      winmirror.backend.shutdown().catch(() => {}).finally(() => app.quit())
+    }
+  })
 }

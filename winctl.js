@@ -52,7 +52,8 @@ const realBackend = {
   move: (items) => withTempJson(items, (file) => runPS(['-Cmd', 'move', '-BatchFile', file])),
   zoom: (handle, steps) => runPS(['-Cmd', 'zoom', '-Handle', String(handle), '-Steps', String(steps)], 20000),
   focus: (handle) => runPS(['-Cmd', 'focus', '-Handle', String(handle)]),
-  minimize: (handle) => runPS(['-Cmd', 'minimize', '-Handle', String(handle)])
+  minimize: (handle) => runPS(['-Cmd', 'minimize', '-Handle', String(handle)]),
+  foreground: () => runPS(['-Cmd', 'foreground'])
 }
 
 /* ---------- بک‌اند آزمایشی (برای توسعه/تست روی غیر ویندوز) ---------- */
@@ -101,6 +102,11 @@ const mockBackend = {
     const w = mockState.get(Number(handle))
     if (w) w.minimized = true
     return { ok: true }
+  },
+  async foreground () {
+    // در محیط آزمایشی، همیشه اولین پنجرهٔ مرورگر را «فعال» فرض می‌کنیم تا سناریوی mirror قابل تست باشد
+    const w = mockState.get(1002)
+    return { ok: true, window: w ? { ...w } : null }
   }
 }
 

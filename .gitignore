@@ -2,3 +2,7 @@ node_modules/
 release/
 *.log
 selftest-*.png
+winmirror/bin/
+winmirror/obj/
+winmirror/publish/
+*.pdb

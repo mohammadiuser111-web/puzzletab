@@ -13,6 +13,7 @@ winctl.init(app)
 
 const IS_SELFTEST = process.argv.includes('--selftest')
 const IS_SELFTEST_OVERLAY = process.argv.includes('--selftest-overlay')
+const IS_SELFTEST_AUTOSCALE = process.argv.includes('--selftest-autoscale')
 
 let tray = null
 let embeddedWin = null /* پنجرهٔ قدیمی: کاشی‌های سایت داخل برنامه */
@@ -250,59 +251,110 @@ function trayIconPath () {
   return fs.existsSync(p) ? p : path.join(__dirname, 'assets', 'icon.png')
 }
 
-async function applyLastManagedLayout () {
-  const managed = (loadStore() || {}).managed
-  if (!managed || !Array.isArray(managed.items) || !managed.items.length) {
-    notify('چیدمانی ذخیره نشده', 'اول از «چیدمان پنجره‌های باز…» چند پنجره انتخاب و مرتب کن.')
-    return
-  }
-  let list
-  try { list = await winctl.list() } catch (e) { notify('خطا', e.message); return }
-  if (!list || !list.ok) { notify('خطا در خواندن پنجره‌ها', (list && list.error) || ''); return }
-
-  const moves = []
-  let matched = 0
-  for (const item of managed.items) {
-    const found = list.windows.find((w) =>
-      (!item.matchProcess || w.process.toLowerCase() === item.matchProcess.toLowerCase()) &&
-      (!item.matchTitleContains || w.title.includes(item.matchTitleContains))
-    )
-    if (found && item.lastRect) {
-      matched++
-      moves.push({ handle: found.handle, x: item.lastRect.x, y: item.lastRect.y, w: item.lastRect.w, h: item.lastRect.h })
-      if (item.isBrowser) {
-        const steps = zoomStepsFor(item.lastRect.w, item.refWidth || 1280)
-        winctl.zoom(found.handle, steps).catch(() => {})
-      }
-    }
-  }
-  if (moves.length) await winctl.move(moves).catch(() => {})
-  notify('چیدمان اعمال شد', matched + ' از ' + managed.items.length + ' پنجره پیدا و جابه‌جا شد.')
-}
-
+/* ================= نگهبان مقیاس خودکار (بدون نیاز به انتخاب، بدون هیچ باکسی) =================
+ * منطق: هر چند صدم ثانیه یک‌بار لیست پنجره‌های واقعیِ باز را می‌خوانیم. برای هر پنجره‌ای که
+ * متعلق به یکی از دسته‌های «مدیریت‌شده» باشد (مرورگر/ترمینال/سفارشی)، همان لحظهٔ اولی که دیده
+ * می‌شود اندازه‌اش را به‌عنوان «مرجع ۱۰۰٪» ثبت می‌کنیم. از آن به بعد، وقتی کاربر با دست (درست
+ * مثل هر پنجرهٔ ویندوزی دیگر) لبهٔ آن را می‌کشد و تغییر اندازه می‌دهد، به‌محض این‌که اندازه
+ * چند صدم ثانیه «ثابت» بماند (یعنی کشیدن تمام شده)، میزان زوم لازم را محاسبه و به‌صورت نامرئی
+ * اعمال می‌کنیم تا طرح‌بندی داخلی صفحه دقیقاً مثل حالت ۱۰۰٪ بماند و فقط کوچک‌تر دیده شود —
+ * بدون هیچ پنجره/باکس/انتخابگرِ اضافه روی صفحه. */
 const ZOOM_STEPS_TABLE = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500]
+const ZOOM_100_IDX = ZOOM_STEPS_TABLE.indexOf(100)
 function zoomStepsFor (newWidth, refWidth) {
-  const pct = Math.max(25, Math.min(500, Math.round((newWidth / refWidth) * 100)))
-  let best = 0, bestDiff = Infinity
+  if (!refWidth || refWidth <= 0) return 0
+  const pct = Math.max(25, Math.min(500, (newWidth / refWidth) * 100))
+  let best = ZOOM_100_IDX, bestDiff = Infinity
   ZOOM_STEPS_TABLE.forEach((v, idx) => {
     const d = Math.abs(v - pct)
     if (d < bestDiff) { bestDiff = d; best = idx }
   })
-  return best - ZOOM_STEPS_TABLE.indexOf(100)
+  return best - ZOOM_100_IDX
 }
 
-async function resetAllZoom () {
-  const managed = (loadStore() || {}).managed
-  if (!managed || !Array.isArray(managed.items)) return
-  let list
-  try { list = await winctl.list() } catch (_) { return }
-  if (!list || !list.ok) return
-  for (const item of managed.items) {
-    if (!item.isBrowser) continue
-    const found = list.windows.find((w) => (!item.matchProcess || w.process.toLowerCase() === item.matchProcess.toLowerCase()))
-    if (found) await winctl.zoom(found.handle, 0).catch(() => {})
+function normalizeProc (p) { return String(p || '').toLowerCase().replace(/\.exe$/, '') }
+
+// Process.ProcessName در ویندوز هرگز شامل پسوند .exe نیست (مثلاً "chrome" نه "chrome.exe")
+const BROWSER_SET = new Set(['chrome', 'msedge', 'firefox', 'brave', 'opera', 'vivaldi', 'chromium'])
+const TERMINAL_SET = new Set(['windowsterminal', 'cmd', 'powershell', 'pwsh', 'conhost'])
+
+function loadAutoscaleSettings () {
+  const s = (loadStore() || {}).autoscale || {}
+  return {
+    enabled: s.enabled !== false,
+    browsers: s.browsers !== false,
+    terminals: s.terminals !== false,
+    custom: Array.isArray(s.custom) ? s.custom.map(normalizeProc) : []
   }
-  notify('زوم بازنشانی شد', 'زوم مرورگرهای مدیریت‌شده به ۱۰۰٪ برگشت.')
+}
+let autoscale = loadAutoscaleSettings()
+function saveAutoscale () { saveStorePatch({ autoscale }) }
+
+function isManagedProc (procName) {
+  if (!autoscale.enabled) return false
+  const p = normalizeProc(procName)
+  if (autoscale.browsers && BROWSER_SET.has(p)) return true
+  if (autoscale.terminals && TERMINAL_SET.has(p)) return true
+  if (autoscale.custom.includes(p)) return true
+  return false
+}
+
+const AUTOSCALE_POLL_MS = 350
+const AUTOSCALE_DEBOUNCE_MS = 300
+const AUTOSCALE_MIN_DELTA = 4
+const autoTrack = new Map() // handle -> { baselineW, baselineH, stableW, stableSince, appliedSteps, process }
+let autoscaleTimer = null
+
+async function autoscaleTick () {
+  try {
+    const list = await winctl.list()
+    if (list && list.ok && Array.isArray(list.windows)) {
+      const live = new Set()
+      const now = Date.now()
+      for (const w of list.windows) {
+        live.add(w.handle)
+        if (w.minimized || !isManagedProc(w.process)) { autoTrack.delete(w.handle); continue }
+        let t = autoTrack.get(w.handle)
+        if (!t) {
+          autoTrack.set(w.handle, { baselineW: w.w, baselineH: w.h, stableW: w.w, stableSince: now, appliedSteps: 0, process: w.process })
+          continue // اولین‌بار دیدن پنجره: همین اندازه را مرجع ۱۰۰٪ می‌گیریم، زومی اعمال نمی‌شود
+        }
+        if (Math.abs(w.w - t.stableW) > AUTOSCALE_MIN_DELTA) {
+          t.stableW = w.w
+          t.stableSince = now
+        } else if (now - t.stableSince >= AUTOSCALE_DEBOUNCE_MS) {
+          const steps = zoomStepsFor(t.stableW, t.baselineW)
+          if (steps !== t.appliedSteps) {
+            t.appliedSteps = steps
+            winctl.zoom(w.handle, steps).catch(() => {})
+          }
+        }
+      }
+      for (const h of Array.from(autoTrack.keys())) if (!live.has(h)) autoTrack.delete(h)
+    }
+  } catch (e) {
+    console.error('[autoscale] tick failed:', e.message)
+  } finally {
+    autoscaleTimer = setTimeout(autoscaleTick, AUTOSCALE_POLL_MS)
+  }
+}
+function startAutoscale () { if (!autoscaleTimer) autoscaleTick() }
+function stopAutoscale () { if (autoscaleTimer) { clearTimeout(autoscaleTimer); autoscaleTimer = null } }
+
+async function resetAllZoom () {
+  const handles = Array.from(autoTrack.keys())
+  let changed = 0
+  for (const h of handles) {
+    const t = autoTrack.get(h)
+    if (t && t.appliedSteps !== 0) {
+      await winctl.zoom(h, 0).catch(() => {})
+      t.appliedSteps = 0
+      t.stableW = t.baselineW
+      t.stableSince = Date.now()
+      changed++
+    }
+  }
+  notify('زوم بازنشانی شد', changed ? (changed + ' پنجره به ۱۰۰٪ برگشت.') : 'همهٔ پنجره‌های مدیریت‌شده همین الان در ۱۰۰٪ هستند.')
 }
 
 function notify (title, body) {
@@ -324,12 +376,40 @@ function buildTrayMenu () {
   }
   return Menu.buildFromTemplate([
     { label: 'پازل‌تب' + (winctl.isMock ? '  (حالت آزمایشی/غیر ویندوز)' : ''), enabled: false },
+    { label: autoscale.enabled ? 'فعال — در حال مراقبت از پنجره‌ها' : 'غیرفعال', enabled: false },
     { type: 'separator' },
-    { label: 'چیدمان پنجره‌های باز…', icon: icon('layout'), click: () => createPickerWindow() },
-    { label: 'اعمال آخرین چیدمان', icon: icon('restore'), click: () => applyLastManagedLayout() },
-    { label: 'بازنشانی زوم مرورگرها', icon: icon('zoom-reset'), click: () => resetAllZoom() },
+    {
+      label: 'مقیاس‌گذاری خودکار هنگام تغییر اندازه',
+      type: 'checkbox',
+      checked: autoscale.enabled,
+      click: (item) => { autoscale.enabled = item.checked; saveAutoscale(); if (!item.checked) resetAllZoom(); refreshTrayMenu() }
+    },
+    {
+      label: 'برنامه‌های مدیریت‌شده',
+      submenu: [
+        {
+          label: 'مرورگرها (Chrome / Edge / Firefox / Brave / Opera / Vivaldi)',
+          type: 'checkbox',
+          checked: autoscale.browsers,
+          click: (item) => { autoscale.browsers = item.checked; saveAutoscale(); refreshTrayMenu() }
+        },
+        {
+          label: 'ترمینال (Windows Terminal / cmd / PowerShell)',
+          type: 'checkbox',
+          checked: autoscale.terminals,
+          click: (item) => { autoscale.terminals = item.checked; saveAutoscale(); refreshTrayMenu() }
+        }
+      ]
+    },
+    { label: 'بازنشانی زوم همه به ۱۰۰٪', icon: icon('zoom-reset'), click: () => resetAllZoom() },
     { type: 'separator' },
     { label: 'حالت کاشی‌های داخلی (تب‌های سایت در یک پنجره)', icon: icon('tiles'), click: () => createEmbeddedWindow() },
+    {
+      label: 'گزینه‌های پیشرفته',
+      submenu: [
+        { label: 'چیدمان دستیِ پنجره‌ها (اختیاری — معمولاً لازم نیست)', icon: icon('layout'), click: () => createPickerWindow() }
+      ]
+    },
     { type: 'separator' },
     {
       label: 'اجرا هنگام ورود به ویندوز',
@@ -342,13 +422,14 @@ function buildTrayMenu () {
   ])
 }
 
+function refreshTrayMenu () { if (tray && !tray.isDestroyed()) tray.setContextMenu(buildTrayMenu()) }
+
 function setupTray () {
   try {
     tray = new Tray(nativeImage.createFromPath(trayIconPath()))
-    tray.setToolTip('پازل‌تب — چیدمان پازلیِ پنجره‌های باز ویندوز')
+    tray.setToolTip('پازل‌تب — مقیاس‌گذاری خودکار پنجره‌های باز ویندوز (بدون نیاز به تنظیم)')
     tray.setContextMenu(buildTrayMenu())
-    tray.on('click', () => createPickerWindow())
-    tray.on('double-click', () => createPickerWindow())
+    // عمداً هیچ کلیکی پنجره/باکسی باز نمی‌کند — همه‌چیز فقط از طریق منوی راست‌کلیک کنترل می‌شود.
   } catch (e) {
     console.error('[tray] failed to create tray icon:', e.message)
   }
@@ -421,19 +502,66 @@ async function runOverlaySelfTest () {
   app.exit(0)
 }
 
+/* ================= تست خودکار نگهبان مقیاس (بدون UI، فقط با بک‌اند آزمایشی) ================= */
+async function runAutoscaleSelfTest () {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+  const killer = setTimeout(() => { console.error('SELFTEST_TIMEOUT'); app.exit(2) }, 60000)
+  const fail = (msg) => { console.error('SELFTEST_FAILED:', msg); clearTimeout(killer); app.exit(1) }
+
+  // گام ۱: یک تیک برای این‌که اندازهٔ فعلیِ پنجره‌های مک (chrome=1100, msedge=1000, Telegram, Spotify) به‌عنوان مرجع ۱۰۰٪ ثبت شود.
+  await autoscaleTick()
+  await sleep(50)
+  console.log('SELFTEST AFTER SEED:', JSON.stringify(Array.from(autoTrack.entries())))
+  if (!autoTrack.has(1002) || !autoTrack.has(1003)) return fail('مرورگرهای مک باید ردیابی شوند')
+  if (autoTrack.has(1001) || autoTrack.has(1004)) return fail('تلگرام/اسپاتیفای نباید ردیابی شوند (مدیریت‌شده نیستند)')
+
+  // گام ۲: شبیه‌سازی کوچک‌کردن دستیِ پنجرهٔ chrome (از 1100 به 550 — دقیقاً نصف)
+  await winctl.move([{ handle: 1002, x: 1000, y: 80, w: 550, h: 720 }])
+  await autoscaleTick() // اندازه عوض شده -> فقط تایمرِ «ثبات» ریست می‌شود، هنوز زومی اعمال نمی‌شود
+  const mid = autoTrack.get(1002)
+  if (!mid || mid.appliedSteps !== 0) return fail('نباید فوراً زوم اعمال شود (باید منتظر ثبات اندازه بماند)')
+
+  // گام ۳: صبر برای عبور از آستانهٔ debounce، سپس یک تیک دیگر -> حالا باید زوم اعمال شود
+  await sleep(AUTOSCALE_DEBOUNCE_MS + 80)
+  await autoscaleTick()
+  const after = autoTrack.get(1002)
+  const expectedSteps = zoomStepsFor(550, 1100) // 550/1100=50% -> دقیقاً روی سطح ۵۰٪ جدول
+  console.log('SELFTEST ZOOM RESULT:', JSON.stringify({ expectedSteps, appliedSteps: after && after.appliedSteps }))
+  if (!after || after.appliedSteps !== expectedSteps) return fail('میزان زوم محاسبه/اعمال‌شده با انتظار یکی نیست')
+
+  // گام ۴: تلگرام هرگز نباید مدیریت/زوم شود، حتی اگر تغییر اندازه بدهد
+  await winctl.move([{ handle: 1001, x: 80, y: 80, w: 300, h: 640 }])
+  await autoscaleTick()
+  await sleep(AUTOSCALE_DEBOUNCE_MS + 80)
+  await autoscaleTick()
+  if (autoTrack.has(1001)) return fail('تلگرام نباید هیچ‌وقت ردیابی/زوم شود')
+
+  // گام ۵: خاموش‌کردن مدیریتِ مرورگرها باید زوم را ریست و ردیابی را متوقف کند
+  autoscale.browsers = false
+  await resetAllZoom()
+  await autoscaleTick()
+  if (autoTrack.has(1002) || autoTrack.has(1003)) return fail('بعد از خاموش‌کردن «مرورگرها» دیگر نباید ردیابی شوند')
+
+  console.log('SELFTEST_AUTOSCALE_DONE')
+  clearTimeout(killer)
+  app.exit(0)
+}
+
 /* ================= چرخهٔ حیات برنامه ================= */
-const gotLock = IS_SELFTEST || IS_SELFTEST_OVERLAY || app.requestSingleInstanceLock()
+const gotLock = IS_SELFTEST || IS_SELFTEST_OVERLAY || IS_SELFTEST_AUTOSCALE || app.requestSingleInstanceLock()
 
 if (!gotLock) {
   app.quit()
 } else {
-  app.on('second-instance', () => { createPickerWindow() })
+  app.on('second-instance', () => { /* نمونهٔ دوم فقط بی‌صدا بسته می‌شود؛ هیچ پنجره‌ای باز نمی‌کنیم */ })
 
   app.whenReady().then(async () => {
     if (IS_SELFTEST) { try { await runSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
     if (IS_SELFTEST_OVERLAY) { try { await runOverlaySelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
+    if (IS_SELFTEST_AUTOSCALE) { try { await runAutoscaleSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
 
     setupTray()
+    startAutoscale()
 
     try {
       globalShortcut.register('Control+Alt+P', () => {
@@ -441,12 +569,10 @@ if (!gotLock) {
         else createPickerWindow()
       })
     } catch (_) {}
-
-    app.on('activate', () => { createPickerWindow() })
   })
 
   app.on('window-all-closed', () => {
     /* عمداً خالی: برنامه باید در System Tray زنده بماند، حتی وقتی هیچ پنجره‌ای باز نیست. */
   })
-  app.on('will-quit', () => globalShortcut.unregisterAll())
+  app.on('will-quit', () => { globalShortcut.unregisterAll(); stopAutoscale() })
 }

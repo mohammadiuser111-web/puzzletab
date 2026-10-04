@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob:;">
+<title>انتخاب پنجره‌ها</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="card">
+    <div class="drag">
+      <b>🧩 چیدمان پنجره‌های باز</b>
+      <button id="btnClose" class="x" title="بستن">✕</button>
+    </div>
+    <div class="sub">پنجره‌هایی که می‌خوای مثل پازل بچینی رو انتخاب کن.</div>
+    <div class="searchRow">
+      <input id="search" class="text" placeholder="جست‌وجو (نام برنامه یا عنوان)…">
+      <button id="btnRefresh" class="iconbtn" title="بازخوانی لیست">⟳</button>
+    </div>
+    <div id="list" class="list">
+      <div class="loading">در حال خواندن پنجره‌های باز…</div>
+    </div>
+    <div class="footer">
+      <span id="countLabel" class="count">۰ انتخاب شده</span>
+      <div class="footer-btns">
+        <button id="btnCancel" class="btn">انصراف</button>
+        <button id="btnGo" class="btn primary" disabled>ادامه و چیدن ◀</button>
+      </div>
+    </div>
+  </div>
+<script src="picker.js"></script>
+</body>
+</html>

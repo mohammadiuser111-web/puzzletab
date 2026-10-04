@@ -1,0 +1,116 @@
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: transparent; }
+body { font-family: "Segoe UI Variable Text", "Segoe UI", "Vazirmatn", Tahoma, sans-serif; user-select: none; }
+
+html[data-theme="dark"] {
+  --stroke: rgba(255,255,255,.18);
+  --text: #fff;
+  --text-2: #cfcfcf;
+  --acrylic: rgba(32,32,32,.55);
+  --head: rgba(20,20,20,.8);
+  --accent: #0078d4;
+  color-scheme: dark;
+}
+html[data-theme="light"] {
+  --stroke: rgba(0,0,0,.18);
+  --text: #141414;
+  --text-2: #444;
+  --acrylic: rgba(255,255,255,.55);
+  --head: rgba(245,245,245,.85);
+  --accent: #0078d4;
+  color-scheme: light;
+}
+
+#canvas {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.18);
+}
+
+#monitors { position: absolute; inset: 0; pointer-events: none; }
+.monrect {
+  position: absolute;
+  border: 1px dashed rgba(255,255,255,.18);
+  border-radius: 4px;
+}
+
+#pill {
+  position: fixed; top: 18px; left: 50%; transform: translateX(-50%);
+  display: flex; align-items: center; gap: 8px;
+  background: var(--head);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--stroke);
+  border-radius: 999px;
+  padding: 7px 10px 7px 16px;
+  color: var(--text);
+  box-shadow: 0 8px 24px rgba(0,0,0,.35);
+  z-index: 10000;
+  -webkit-app-region: drag;
+}
+.pillTitle { font-size: 12.5px; color: var(--text-2); margin-left: 6px; white-space: nowrap; }
+.pillBtn {
+  -webkit-app-region: no-drag;
+  height: 30px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.08); color: var(--text); font: inherit; font-size: 12.5px;
+  cursor: pointer; white-space: nowrap;
+}
+.pillBtn:hover { background: rgba(255,255,255,.16); }
+.pillBtn.done { background: var(--accent); border-color: transparent; color: #fff; font-weight: 600; }
+
+#empty { position: fixed; inset: 0; display: grid; place-items: center; pointer-events: none; }
+#empty[hidden] { display: none; }
+.emptyBox {
+  max-width: 420px; text-align: center; padding: 22px 26px; border-radius: 12px;
+  background: var(--head); border: 1px solid var(--stroke); color: var(--text-2); font-size: 13px;
+  backdrop-filter: blur(20px);
+}
+
+.gtile {
+  position: absolute;
+  border-radius: 10px;
+  border: 1px solid var(--stroke);
+  background: var(--acrylic);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 30px rgba(0,0,0,.35);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+  min-width: 220px; min-height: 140px;
+}
+.gtile.dragging, .gtile.resizing { box-shadow: 0 16px 40px rgba(0,0,0,.5); outline: 2px solid var(--accent); }
+
+.ghead {
+  -webkit-app-region: no-drag;
+  flex: none; height: 38px;
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 8px 0 10px;
+  background: var(--head);
+  cursor: grab;
+  border-bottom: 1px solid var(--stroke);
+}
+.ghead:active { cursor: grabbing; }
+.gic { width: 18px; height: 18px; flex: none; display: grid; place-items: center; font-size: 13px; }
+.gic img { width: 100%; height: 100%; object-fit: contain; }
+.gtitle { flex: 1; font-size: 12.5px; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gref {
+  flex: none; height: 24px; font-size: 11px; border-radius: 5px; border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.08); color: var(--text); padding: 0 4px;
+}
+.gx {
+  flex: none; width: 24px; height: 24px; border-radius: 5px; border: 0;
+  background: transparent; color: var(--text-2); cursor: pointer; font-size: 12px;
+}
+.gx:hover { background: #c42b1c; color: #fff; }
+
+.gbody { flex: 1; display: grid; place-items: center; padding: 10px; }
+.ginfo { font-size: 11.5px; color: var(--text-2); text-align: center; line-height: 1.6; }
+
+.rz { position: absolute; }
+.rz.n, .rz.s { left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
+.rz.n { top: -4px; } .rz.s { bottom: -4px; }
+.rz.e, .rz.w { top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
+.rz.e { right: -4px; } .rz.w { left: -4px; }
+.rz.ne, .rz.nw, .rz.se, .rz.sw { width: 16px; height: 16px; }
+.rz.ne { top: -4px; right: -4px; cursor: nesw-resize; }
+.rz.nw { top: -4px; left: -4px; cursor: nwse-resize; }
+.rz.se { bottom: -4px; right: -4px; cursor: nwse-resize; }
+.rz.sw { bottom: -4px; left: -4px; cursor: nesw-resize; }

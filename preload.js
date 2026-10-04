@@ -1,25 +1,45 @@
 'use strict'
-/* پازل‌تب — پل امن بین صفحه و فرایند اصلی */
+/* پازل‌تب — پل امن بین صفحات (کاشی داخلی/Picker/Overlay) و فرایند اصلی */
 
 const { contextBridge, ipcRenderer } = require('electron')
 
 const api = {
-  /* اطلاعات سیستم: تم تیره/روشن، رنگ اکسنت، ویندوز ۱۱؟ */
+  /* اطلاعات سیستم */
   info: () => ipcRenderer.invoke('sys:info'),
   onTheme: (cb) => {
     const handler = (_e, data) => cb(data)
     ipcRenderer.on('sys:theme', handler)
     return () => ipcRenderer.removeListener('sys:theme', handler)
   },
-  /* ذخیره‌سازی */
+  /* ذخیره‌سازی عمومی (حالت کاشی داخلی) */
   loadStore: () => ipcRenderer.invoke('store:load'),
   saveStore: (data) => ipcRenderer.invoke('store:save', data),
-  /* باز کردن نشانی در مرورگر پیش‌فرض */
   openExternal: (url) => ipcRenderer.invoke('shell:open', url),
-  /* همیشه روی صفحه */
   setAlwaysOnTop: (v) => ipcRenderer.invoke('win:aot', v),
-  /* پاک‌کردن کوکی/ورود یک کاشی (بر اساس partition آن) */
-  clearTileSession: (partition) => ipcRenderer.invoke('tile:clear-session', partition)
+  clearTileSession: (partition) => ipcRenderer.invoke('tile:clear-session', partition),
+
+  /* کنترل پنجره‌های واقعی ویندوز */
+  winList: () => ipcRenderer.invoke('winctl:list'),
+  winRect: (handle) => ipcRenderer.invoke('winctl:rect', handle),
+  winMove: (items) => ipcRenderer.invoke('winctl:move', items),
+  winZoom: (handle, steps) => ipcRenderer.invoke('winctl:zoom', handle, steps),
+  winFocus: (handle) => ipcRenderer.invoke('winctl:focus', handle),
+
+  /* چیدمان مدیریت‌شده (پایدار) */
+  loadManaged: () => ipcRenderer.invoke('managed:load'),
+  saveManaged: (data) => ipcRenderer.invoke('managed:save', data),
+
+  screensBounds: () => ipcRenderer.invoke('screens:bounds'),
+
+  /* کنترل پنجرهٔ Picker/Overlay */
+  openOverlayWithHandles: (handles) => ipcRenderer.invoke('overlay:openWithHandles', handles),
+  closeOverlay: () => ipcRenderer.invoke('overlay:close'),
+  openPicker: () => ipcRenderer.invoke('picker:open'),
+  onOverlaySeed: (cb) => {
+    const handler = (_e, handles) => cb(handles)
+    ipcRenderer.on('overlay:seed', handler)
+    return () => ipcRenderer.removeListener('overlay:seed', handler)
+  }
 }
 
 try {

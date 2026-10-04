@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: blob:;">
+<title>چیدمان پازلی</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="canvas">
+    <div id="monitors"></div>
+    <div id="pill">
+      <span class="pillTitle">🧩 حالت چیدمان — پنجره‌ها را بکش/تغییر اندازه بده</span>
+      <button id="btnAddMore" class="pillBtn">+ افزودن پنجره</button>
+      <button id="btnResetZoom" class="pillBtn">بازنشانی زوم</button>
+      <button id="btnDone" class="pillBtn done">پایان (Esc)</button>
+    </div>
+    <div id="empty" hidden>
+      <div class="emptyBox">هیچ پنجره‌ای انتخاب نشده. Esc را بزن و دوباره از ترِی «چیدمان پنجره‌های باز» را انتخاب کن.</div>
+    </div>
+  </div>
+
+  <template id="tplGhost">
+    <div class="gtile">
+      <div class="ghead">
+        <span class="gic"><img hidden></span>
+        <span class="gtitle"></span>
+        <select class="gref" hidden>
+          <option value="1920">۱۹۲۰ (مانیتور بزرگ)</option>
+          <option value="1536">۱۵۳۶ (دسکتاپ)</option>
+          <option value="1280" selected>۱۲۸۰ (پیش‌فرض)</option>
+          <option value="1024">۱۰۲۴ (لپ‌تاپ کوچک)</option>
+          <option value="820">۸۲۰ (تبلت)</option>
+        </select>
+        <button class="gx" title="حذف از چیدمان">✕</button>
+      </div>
+      <div class="gbody">
+        <div class="ginfo"></div>
+      </div>
+      <div class="rz n" data-dir="n"></div>
+      <div class="rz s" data-dir="s"></div>
+      <div class="rz e" data-dir="e"></div>
+      <div class="rz w" data-dir="w"></div>
+      <div class="rz ne" data-dir="ne"></div>
+      <div class="rz nw" data-dir="nw"></div>
+      <div class="rz se" data-dir="se"></div>
+      <div class="rz sw" data-dir="sw"></div>
+    </div>
+  </template>
+
+  <script src="overlay.js"></script>
+</body>
+</html>

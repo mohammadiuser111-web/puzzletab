@@ -9,6 +9,7 @@
   "scripts": {
     "start": "electron .",
     "selftest": "electron . --selftest",
+    "selftest:overlay": "electron . --selftest-overlay",
     "dist": "electron-builder --win"
   },
   "devDependencies": {
@@ -24,8 +25,12 @@
     "files": [
       "main.js",
       "preload.js",
+      "winctl.js",
       "renderer/**/*",
       "assets/**/*"
+    ],
+    "extraResources": [
+      { "from": "winhelper", "to": "winhelper" }
     ],
     "win": {
       "target": [

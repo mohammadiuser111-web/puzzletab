@@ -17,6 +17,7 @@ const IS_SELFTEST = process.argv.includes('--selftest')
 const IS_SELFTEST_OVERLAY = process.argv.includes('--selftest-overlay')
 const IS_SELFTEST_AUTOSCALE = process.argv.includes('--selftest-autoscale')
 const IS_SELFTEST_MIRROR = process.argv.includes('--selftest-mirror')
+const IS_SELFTEST_MIRROR_AUTO = process.argv.includes('--selftest-mirror-auto')
 
 let tray = null
 let embeddedWin = null /* پنجرهٔ قدیمی: کاشی‌های سایت داخل برنامه */
@@ -373,10 +374,30 @@ function notify (title, body) {
  * (نوار تب/آدرس را هم همراه با محتوا) را عیناً مثل یک عکس کوچک‌شده نشان می‌دهد — دقیقاً مثل دورکردن
  * یک گوشی از جلوی چشم. پنجرهٔ واقعی خارج از صفحه، در اندازهٔ ثابتِ ۱۰۰٪، «پارک» می‌شود و با
  * DWM Thumbnail یک آینهٔ زنده و کاملاً تعاملی (کلیک/اسکرول/تایپ) در هر جای صفحه نشان داده می‌شود.
- * این یک حالتِ اختیاری و دستی است (با میان‌بر صفحه‌کلید فعال می‌شود)، نه خودکار روی همهٔ پنجره‌ها. */
+ * برنامه‌های داخلِ «لیستِ آینه‌سازیِ خودکار» (مثلاً تلگرام/VSCode) به‌محضِ دیده‌شدن، خودبه‌خود و بدون
+ * نیاز به هیچ کلید ترکیبی یا انتخابی به آینه تبدیل می‌شوند — از همان اول با دست خودتان لبهٔ کادر را
+ * می‌کشید، دقیقاً مثل یک پنجرهٔ معمولی. Ctrl+Alt+M هم به‌عنوان میان‌بر دستیِ اضافه (برای هر برنامهٔ
+ * دیگری که در لیست نیست) باقی مانده است. */
 let mirrorNextId = 1
 const activeMirrors = new Map() // id -> { handle, process, title }
 let mirrorEngineStarted = false
+
+const MIRROR_DEFAULT_PROCESSES = ['telegram', 'code']
+
+function loadMirrorAutoSettings () {
+  const s = (loadStore() || {}).mirrorAuto || {}
+  return {
+    enabled: s.enabled !== false,
+    processes: Array.isArray(s.processes) ? s.processes.map(normalizeProc) : ['telegram', 'code']
+  }
+}
+let mirrorAuto = loadMirrorAutoSettings()
+function saveMirrorAuto () { saveStorePatch({ mirrorAuto }) }
+
+function isAlreadyMirrored (handle) {
+  for (const m of activeMirrors.values()) if (m.handle === handle) return true
+  return false
+}
 
 async function ensureMirrorEngine () {
   if (mirrorEngineStarted) return true
@@ -397,25 +418,28 @@ async function ensureMirrorEngine () {
   return true
 }
 
-async function mirrorFocusedWindow () {
-  try {
-    await ensureMirrorEngine()
-  } catch (e) { notify('خطا در راه‌اندازیِ موتور آینه', e.message); return }
-
-  let fg
-  try { fg = await winctl.foreground() } catch (e) { notify('خطا', e.message); return }
-  if (!fg || !fg.ok || !fg.window) { notify('پنجرهٔ فعالی پیدا نشد', ''); return }
-  const w = fg.window
-
+async function createMirrorForWindow (w, { silent } = {}) {
+  if (isAlreadyMirrored(w.handle)) return null
+  try { await ensureMirrorEngine() } catch (e) { if (!silent) notify('خطا در راه‌اندازیِ موتور آینه', e.message); return null }
   const id = mirrorNextId++
   try {
     await winmirror.backend.createMirror(id, w.handle, { x: w.x, y: w.y, w: w.w, h: w.h }, w.process)
     activeMirrors.set(id, { handle: w.handle, process: w.process, title: w.title })
-    notify('آینه ساخته شد', (w.title || w.process) + ' — حالا لبهٔ کادر را بکشید تا هر اندازه که خواستید کوچک/بزرگ شود (دابل‌کلیک روی کادر = بازگردانی).')
+    if (!silent) notify('آینه ساخته شد', (w.title || w.process) + ' — حالا لبهٔ کادر را بکشید تا هر اندازه که خواستید کوچک/بزرگ شود (دابل‌کلیک روی کادر = بازگردانی).')
     refreshTrayMenu()
+    return id
   } catch (e) {
-    notify('ساخت آینه ناموفق بود', e.message)
+    if (!silent) notify('ساخت آینه ناموفق بود', e.message)
+    return null
   }
+}
+
+async function mirrorFocusedWindow () {
+  let fg
+  try { fg = await winctl.foreground() } catch (e) { notify('خطا', e.message); return }
+  if (!fg || !fg.ok || !fg.window) { notify('پنجرهٔ فعالی پیدا نشد', ''); return }
+  if (isAlreadyMirrored(fg.window.handle)) { notify('این پنجره همین الان هم آینه است', ''); return }
+  await createMirrorForWindow(fg.window)
 }
 
 async function restoreAllMirrors () {
@@ -427,6 +451,61 @@ async function restoreAllMirrors () {
   refreshTrayMenu()
   if (ids.length) notify('بازگردانی شد', ids.length + ' آینه بسته شد و پنجره‌های واقعی به اندازهٔ اصلی برگشتند.')
 }
+
+/* ---------- آینه‌سازیِ خودکار: هر چند صدم ثانیه چک می‌کنیم آیا پنجره‌ای از لیستِ خودکار تازه باز شده ---------- */
+let mirrorAutoTimer = null
+async function mirrorAutoTick () {
+  try {
+    if (mirrorAuto.enabled && mirrorAuto.processes.length) {
+      const list = await winctl.list()
+      if (list && list.ok && Array.isArray(list.windows)) {
+        for (const w of list.windows) {
+          if (w.minimized) continue
+          const p = normalizeProc(w.process)
+          if (!mirrorAuto.processes.includes(p)) continue
+          if (isAlreadyMirrored(w.handle)) continue
+          await createMirrorForWindow(w, { silent: true })
+        }
+      }
+    }
+  } catch (e) {
+    console.error('[mirror-auto] tick failed:', e.message)
+  } finally {
+    mirrorAutoTimer = setTimeout(mirrorAutoTick, 800)
+  }
+}
+function startMirrorAuto () { if (!mirrorAutoTimer) mirrorAutoTick() }
+function stopMirrorAuto () { if (mirrorAutoTimer) { clearTimeout(mirrorAutoTimer); mirrorAutoTimer = null } }
+
+/* ---------- پنجرهٔ کوچکِ «افزودن برنامهٔ سفارشی» (فقط با کلیکِ خودِ کاربر از منوی تری باز می‌شود) ---------- */
+function askForProcessName () {
+  return new Promise((resolve) => {
+    const win = new BrowserWindow({
+      width: 380,
+      height: 190,
+      resizable: false,
+      minimizable: false,
+      maximizable: false,
+      frame: false,
+      transparent: true,
+      alwaysOnTop: true,
+      show: false,
+      webPreferences: {
+        preload: path.join(__dirname, 'renderer', 'prompt', 'preload-prompt.js'),
+        contextIsolation: true,
+        nodeIntegration: false
+      }
+    })
+    let done = false
+    const finish = (val) => { if (done) return; done = true; try { win.close() } catch (_) {}; resolve(val) }
+    ipcMain.once('prompt:submit', (_e, val) => finish(val))
+    ipcMain.once('prompt:cancel', () => finish(null))
+    win.on('closed', () => finish(null))
+    win.loadFile(path.join(__dirname, 'renderer', 'prompt', 'index.html'))
+    win.once('ready-to-show', () => win.show())
+  })
+}
+
 
 function buildTrayMenu () {
   const loginSettings = process.platform === 'win32' ? app.getLoginItemSettings() : { openAtLogin: false }
@@ -469,10 +548,48 @@ function buildTrayMenu () {
     {
       label: activeMirrors.size ? `آینه‌سازیِ دقیق پنجره (${activeMirrors.size} فعال)` : 'آینه‌سازیِ دقیق پنجره',
       submenu: [
-        { label: 'آینه‌کردن پنجرهٔ فعال اینجا  —  Ctrl+Alt+M', click: () => mirrorFocusedWindow() },
+        {
+          label: 'آینه‌سازیِ خودکار (بدون نیاز به کلید/کشیدن اولیه)',
+          type: 'checkbox',
+          checked: mirrorAuto.enabled,
+          click: (item) => { mirrorAuto.enabled = item.checked; saveMirrorAuto(); refreshTrayMenu() }
+        },
+        {
+          label: 'برنامه‌های آینه‌سازیِ خودکار',
+          submenu: [
+            ...MIRROR_DEFAULT_PROCESSES.map((p) => ({
+              label: p,
+              type: 'checkbox',
+              checked: mirrorAuto.processes.includes(p),
+              click: (item) => {
+                mirrorAuto.processes = item.checked
+                  ? Array.from(new Set([...mirrorAuto.processes, p]))
+                  : mirrorAuto.processes.filter((x) => x !== p)
+                saveMirrorAuto(); refreshTrayMenu()
+              }
+            })),
+            ...mirrorAuto.processes.filter((p) => !MIRROR_DEFAULT_PROCESSES.includes(p)).map((p) => ({
+              label: p + '  (حذف)',
+              click: () => { mirrorAuto.processes = mirrorAuto.processes.filter((x) => x !== p); saveMirrorAuto(); refreshTrayMenu() }
+            })),
+            { type: 'separator' },
+            {
+              label: 'افزودن برنامهٔ سفارشی…',
+              click: async () => {
+                const name = await askForProcessName()
+                if (name) {
+                  const p = normalizeProc(name)
+                  if (p && !mirrorAuto.processes.includes(p)) { mirrorAuto.processes.push(p); saveMirrorAuto(); refreshTrayMenu() }
+                }
+              }
+            }
+          ]
+        },
+        { type: 'separator' },
+        { label: 'آینه‌کردن دستیِ پنجرهٔ فعال (برای برنامه‌هایی که در لیست بالا نیستند)  —  Ctrl+Alt+M', click: () => mirrorFocusedWindow() },
         { label: 'بازگردانی همهٔ آینه‌ها', enabled: activeMirrors.size > 0, click: () => restoreAllMirrors() },
         { type: 'separator' },
-        { label: 'کل پنجره (نوار تب/آدرس هم) عیناً مثل عکس کوچک می‌شود؛ لبهٔ نازکِ آینه را بکشید تا هر اندازه بخواهید تغییرش دهید؛ دابل‌کلیک روی لبه = بازگردانی.', enabled: false }
+        { label: 'با کشیدنِ لبهٔ نازکِ آینه، دستیِ خودتان هر اندازه بخواهید تغییرش می‌دهید؛ دابل‌کلیک روی لبه = بازگردانی.', enabled: false }
       ]
     },
     { type: 'separator' },
@@ -649,16 +766,54 @@ async function runMirrorSelfTest () {
   await new Promise((r) => setTimeout(r, 50))
   if (activeMirrors.size !== 0) return fail('بعد از sourceLost باید آینه از وضعیت داخلی حذف شده باشد')
 
-  // گام ۴: restoreAllMirrors باید همهٔ آینه‌های باقی‌مانده را ببندد
+  // گام ۴: restoreAllMirrors باید همهٔ آینه‌های باقی‌مانده را ببندد (و دیگر نباید همان پنجره را دوبار آینه کند)
   await mirrorFocusedWindow()
-  await mirrorFocusedWindow()
-  if (activeMirrors.size !== 2) return fail('باید دو آینه ساخته شده باشد')
+  await mirrorFocusedWindow() // باید نادیده گرفته شود چون همان پنجره (1002) همین الان آینه است
+  if (activeMirrors.size !== 1) return fail('نباید یک پنجرهٔ از قبل آینه‌شده، دوباره آینه شود')
+  await createMirrorForWindow({ handle: 1003, process: 'msedge', title: 'Edge', x: 150, y: 760, w: 1000, h: 600 })
+  if (activeMirrors.size !== 2) return fail('باید دو آینهٔ متفاوت ساخته شده باشد')
   await restoreAllMirrors()
   if (activeMirrors.size !== 0) return fail('restoreAllMirrors باید همه را پاک کند')
   const list3 = await winmirror.backend.list()
   if (list3.mirrors.length !== 0) return fail('موتور آینه باید همه را واقعاً بسته باشد')
 
   console.log('SELFTEST_MIRROR_DONE')
+  clearTimeout(killer)
+  app.exit(0)
+}
+
+/* ================= تست خودکار آینه‌سازیِ کاملاً خودکار (بدون هیچ کلید/انتخابی) =================
+ * شبیه‌سازی می‌کند: کاربر هیچ کلید ترکیبی‌ای نمی‌زند؛ صرفاً تلگرام (که در لیست پیش‌فرض است) باز است
+ * و باید خودبه‌خود آینه شود، درحالی‌که chrome/msedge/Spotify (که در لیست نیستند) دست‌نخورده بمانند. */
+async function runMirrorAutoSelfTest () {
+  const killer = setTimeout(() => { console.error('SELFTEST_TIMEOUT'); app.exit(2) }, 60000)
+  const fail = (msg) => { console.error('SELFTEST_FAILED:', msg); clearTimeout(killer); app.exit(1) }
+
+  mirrorAuto = { enabled: true, processes: ['telegram', 'code'] }
+
+  // گام ۱: فقط با اجرای تیکِ پس‌زمینه (نه مثلاً mirrorFocusedWindow) — تلگرام باید خودکار آینه شود
+  await mirrorAutoTick()
+  clearTimeout(mirrorAutoTimer) // self-test خودش چرخهٔ بعدی را کنترل می‌کند
+  await new Promise((r) => setTimeout(r, 30))
+  if (!isAlreadyMirrored(1001)) return fail('تلگرام باید کاملاً خودکار (بدون کلید/انتخاب) آینه شده باشد')
+  if (isAlreadyMirrored(1002) || isAlreadyMirrored(1003) || isAlreadyMirrored(1004)) return fail('مرورگرها/اسپاتیفای نباید در لیستِ آینه‌سازیِ خودکار باشند')
+  console.log('SELFTEST MIRROR-AUTO: تلگرام خودکار آینه شد، بدون هیچ کلید/انتخابی ✓')
+
+  // گام ۲: اجرای دوبارهٔ تیک نباید آینهٔ تکراری بسازد (idempotent)
+  const countBefore = activeMirrors.size
+  await mirrorAutoTick()
+  clearTimeout(mirrorAutoTimer)
+  if (activeMirrors.size !== countBefore) return fail('تیکِ دوباره نباید آینهٔ تکراری بسازد')
+
+  // گام ۳: خاموش‌کردن «تلگرام» از لیست + بازگردانی، سپس روشن‌کردن دوباره باید آن را دوباره آینه کند
+  await restoreAllMirrors()
+  if (isAlreadyMirrored(1001)) return fail('بعد از بازگردانی نباید دیگر آینه باشد')
+  await mirrorAutoTick()
+  clearTimeout(mirrorAutoTimer)
+  if (!isAlreadyMirrored(1001)) return fail('بعد از روشن‌ماندنِ لیست، باید دوباره خودکار آینه شود')
+
+  await restoreAllMirrors()
+  console.log('SELFTEST_MIRROR_AUTO_DONE')
   clearTimeout(killer)
   app.exit(0)
 }
@@ -676,9 +831,12 @@ if (!gotLock) {
     if (IS_SELFTEST_OVERLAY) { try { await runOverlaySelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
     if (IS_SELFTEST_AUTOSCALE) { try { await runAutoscaleSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
     if (IS_SELFTEST_MIRROR) { try { await runMirrorSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
+    if (IS_SELFTEST_MIRROR_AUTO) { try { await runMirrorAutoSelfTest() } catch (e) { console.error('SELFTEST_FAILED:', e && (e.stack || e.message || e)); app.exit(1) } return }
 
     setupTray()
     startAutoscale()
+    startMirrorAuto()
+    if (mirrorAuto.enabled && mirrorAuto.processes.length) ensureMirrorEngine().catch((e) => console.error('[mirror] engine start failed:', e.message))
 
     try {
       globalShortcut.register('Control+Alt+P', () => {
@@ -697,6 +855,7 @@ if (!gotLock) {
   app.on('will-quit', (e) => {
     globalShortcut.unregisterAll()
     stopAutoscale()
+    stopMirrorAuto()
     if (mirrorEngineStarted && !isShuttingDown) {
       isShuttingDown = true
       e.preventDefault()

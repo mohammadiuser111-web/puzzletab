@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8" />
+<title>افزودن برنامه</title>
+<style>
+  :root { color-scheme: dark light; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: transparent; font-family: 'Rubik', 'Segoe UI', Tahoma, sans-serif; }
+  .card {
+    margin: 10px;
+    background: rgba(32,32,32,0.92);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 10px;
+    padding: 14px 16px;
+    backdrop-filter: blur(12px);
+    color: #fff;
+  }
+  label { display: block; font-size: 13px; margin-bottom: 8px; opacity: 0.85; }
+  input {
+    width: 100%; padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.08); color: #fff; font-size: 14px; outline: none;
+  }
+  input:focus { border-color: #0078d4; }
+  .hint { font-size: 11px; opacity: 0.6; margin-top: 6px; }
+  .row { display: flex; gap: 8px; margin-top: 12px; justify-content: flex-end; }
+  button {
+    border: none; border-radius: 6px; padding: 7px 14px; font-size: 13px; cursor: pointer;
+    font-family: inherit;
+  }
+  .ok { background: #0078d4; color: #fff; }
+  .cancel { background: rgba(255,255,255,0.1); color: #fff; }
+</style>
+</head>
+<body>
+  <div class="card">
+    <label for="proc">نامِ فرایند (Process Name) برنامه‌ای که می‌خواهید هنگام تغییراندازه عیناً مثل عکس کوچک شود:</label>
+    <input id="proc" type="text" placeholder="مثلاً: telegram یا Code یا notepad++" autofocus />
+    <div class="hint">این نام را می‌توانید از Task Manager ویندوز، ستون «نام» زیر برگهٔ Details پیدا کنید (بدون .exe).</div>
+    <div class="row">
+      <button class="cancel" id="btnCancel">انصراف</button>
+      <button class="ok" id="btnOk">افزودن</button>
+    </div>
+  </div>
+  <script src="prompt.js"></script>
+</body>
+</html>

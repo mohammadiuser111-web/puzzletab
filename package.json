@@ -1,0 +1,49 @@
+{
+  "name": "puzzletab",
+  "productName": "PuzzleTab",
+  "version": "1.0.0",
+  "description": "پازل‌تب — چیدمان پازلی چند سایت در یک پنجره، با نمای دسکتاپِ کوچک‌شده (Windows 11 style)",
+  "main": "main.js",
+  "license": "MIT",
+  "author": "PuzzleTab",
+  "scripts": {
+    "start": "electron .",
+    "selftest": "electron . --selftest",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3"
+  },
+  "build": {
+    "appId": "ir.puzzletab.app",
+    "productName": "PuzzleTab",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "assets/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "shortcutName": "PuzzleTab",
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "artifactName": "PuzzleTab-Setup-${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "PuzzleTab-Portable-${version}.${ext}"
+    }
+  }
+}

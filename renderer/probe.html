@@ -1,0 +1,43 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>probe</title>
+<style>
+  html,body{margin:0;height:100%;font-family:sans-serif;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:10px;color:#fff;}
+  #mode{font-size:42px;font-weight:800;}
+  #w{font-size:16px;opacity:.85;}
+  .desktop-only{display:none;}
+  .mobile-only{display:none;}
+  /* زیر 700px یعنی سایت فکر می‌کند دارد روی موبایل اجرا می‌شود */
+  @media (max-width: 700px) {
+    body{background:#c42b1c;}
+    .mobile-only{display:block;}
+  }
+  @media (min-width: 701px) {
+    body{background:#107c10;}
+    .desktop-only{display:block;}
+  }
+</style>
+</head>
+<body>
+  <div id="mode">
+    <span class="desktop-only">DESKTOP ✅</span>
+    <span class="mobile-only">MOBILE ⚠</span>
+  </div>
+  <div id="w"></div>
+<script>
+  (function () {
+    var p = new URLSearchParams(location.search)
+    document.title = p.get('label') || 'probe'
+    var h = p.get('hue') || 200
+    document.body.style.background = document.body.style.background /* keep media-query bg */
+    document.getElementById('w').textContent = 'innerWidth=' + window.innerWidth + 'px'
+    window.addEventListener('resize', function () {
+      document.getElementById('w').textContent = 'innerWidth=' + window.innerWidth + 'px'
+    })
+  })()
+</script>
+</body>
+</html>

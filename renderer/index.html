@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="fa" dir="rtl" data-theme="dark" data-mica="0">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src https: http: data: blob:;">
+  <title>پازل‌تب — PuzzleTab</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- نوار ابزار -->
+  <header id="toolbar">
+    <div id="brand" title="پازل‌تب — PuzzleTab">
+      <span class="brand-mark"></span>
+      <b>پازل‌تب</b>
+    </div>
+    <div class="tb-sep"></div>
+
+    <button id="btnAdd" class="btn primary"></button>
+    <button id="btnArrange" class="btn"></button>
+    <button id="btnLayouts" class="btn"></button>
+
+    <div class="spacer"></div>
+
+    <label class="chk" title="کاشی‌ها به شبکه و لبهٔ همسایه‌ها بچسبند">
+      <span>چسبیدن</span>
+      <span class="sw"><input type="checkbox" id="chkSnap" checked><i class="track"></i><i class="dot"></i></span>
+    </label>
+    <label class="chk" title="پنجره همیشه روی بقیهٔ پنجره‌ها بماند">
+      <span>همیشه رو</span>
+      <span class="sw"><input type="checkbox" id="chkAot"><i class="track"></i><i class="dot"></i></span>
+    </label>
+    <button id="btnTheme" class="btn icon" title="تغییر تم"></button>
+  </header>
+
+  <!-- بوم چیدمان -->
+  <main id="canvas">
+    <div id="empty">
+      <div class="empty-mark"></div>
+      <h1>چند سایت، همزمان، در یک پنجره</h1>
+      <p>کاشی‌ها را مثل پازل بچین؛ هر سایت با نمای <b>دسکتاپ</b> خودش نمایش داده می‌شود — فقط کوچک‌تر، نه حالت موبایل.</p>
+      <div id="emptyQuick"></div>
+      <p class="hint">یا از «افزودن کاشی» هر نشانی دلخواهی را اضافه کن.</p>
+    </div>
+  </main>
+
+  <!-- قالب کاشی -->
+  <template id="tplTile">
+    <div class="tile" tabindex="-1">
+      <div class="tile-head">
+        <div class="tile-drag">
+          <span class="tile-fav" hidden><img alt=""></span>
+          <span class="tile-title">در حال بارگذاری…</span>
+        </div>
+        <div class="tile-actions">
+          <button class="tb" data-act="back" title="قبلی"></button>
+          <button class="tb" data-act="fwd" title="بعدی"></button>
+          <button class="tb" data-act="reload" title="بارگذاری مجدد"></button>
+          <button class="tb" data-act="more" title="گزینه‌ها"></button>
+          <button class="tb close" data-act="close" title="بستن"></button>
+        </div>
+      </div>
+      <div class="tile-body">
+        <div class="loadbar"></div>
+        <div class="tile-error" hidden>
+          <div class="err-icon">⚠</div>
+          <div class="err-msg">خطا در بارگذاری</div>
+          <div class="err-actions">
+            <button class="btn" data-err="retry">تلاش دوباره</button>
+            <button class="btn" data-err="open">باز کردن در مرورگر</button>
+          </div>
+        </div>
+      </div>
+      <div class="rz n" data-dir="n"></div>
+      <div class="rz s" data-dir="s"></div>
+      <div class="rz e" data-dir="e"></div>
+      <div class="rz w" data-dir="w"></div>
+      <div class="rz ne" data-dir="ne"></div>
+      <div class="rz nw" data-dir="nw"></div>
+      <div class="rz se" data-dir="se"></div>
+      <div class="rz sw" data-dir="sw"></div>
+    </div>
+  </template>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -81,10 +81,37 @@ static class Program
         }
     }
 
-    const int PARK_X = -32000;
-    const int PARK_Y = 0;
     const int PARK_W = 1440;
     const int PARK_H = 900;
+
+    // به‌جایِ خارج‌کردنِ کاملِ پنجره از مرزهای مانیتور (که باعثِ توقفِ رندرِ برنامه‌های مبتنی بر
+    // GPU می‌شد)، آن را روی خودِ مانیتورِ اصلی، در اندازهٔ ثابتِ مرجع نگه می‌داریم.
+    static (int X, int Y, int W, int H) GetParkBounds()
+    {
+        var b = Screen.PrimaryScreen?.Bounds ?? new Rectangle(0, 0, PARK_W, PARK_H);
+        int w = Math.Min(PARK_W, Math.Max(200, b.Width));
+        int h = Math.Min(PARK_H, Math.Max(200, b.Height));
+        return (b.Left, b.Top, w, h);
+    }
+
+    // پنجره را «نامرئیِ کاملِ کلیک‌ناپذیر» می‌کند ولی از نظرِ خودِ برنامه و ویندوز، همچنان روی
+    // صفحه/مانیتورِ واقعی و «دیده‌شدنی» باقی می‌ماند — بنابراین Chromium/Electron/Qt-ANGLE (که
+    // وقتی پنجره را occluded/off-screen تشخیص بدهند رندر را متوقف می‌کنند) به رندر کردن ادامه
+    // می‌دهند و DWM Thumbnail محتوای زنده را درست نشان می‌دهد.
+    static void MakeInvisibleButAlive(IntPtr hwnd)
+    {
+        long exStyle = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+        exStyle |= Native.WS_EX_LAYERED | Native.WS_EX_TRANSPARENT;
+        Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(exStyle));
+        Native.SetLayeredWindowAttributes(hwnd, 0, 0, Native.LWA_ALPHA);
+    }
+
+    static void RestoreVisibility(IntPtr hwnd)
+    {
+        long exStyle = Native.GetWindowLongPtr(hwnd, Native.GWL_EXSTYLE).ToInt64();
+        exStyle &= ~(long)(Native.WS_EX_LAYERED | Native.WS_EX_TRANSPARENT);
+        Native.SetWindowLongPtr(hwnd, Native.GWL_EXSTYLE, new IntPtr(exStyle));
+    }
 
     static void CmdCreate(JsonElement cmd)
     {
@@ -101,10 +128,13 @@ static class Program
 
         Native.GetWindowRect(src, out var originalRect);
 
-        // پارک‌کردن پنجرهٔ واقعی خارج از صفحه، در اندازهٔ ثابتِ مرجع (۱۰۰٪) — از این به بعد دیگر
-        // هیچ‌وقت لازم نیست اندازه‌اش را تغییر بدهیم؛ فقط آینه (مقصد) تغییر اندازه می‌دهد.
+        // پارک‌کردن پنجرهٔ واقعی: نامرئی/کلیک‌ناپذیرش می‌کنیم ولی روی خودِ مانیتورِ واقعی،
+        // در اندازهٔ ثابتِ مرجع (۱۰۰٪) نگه‌اش می‌داریم — از این به بعد دیگر هیچ‌وقت لازم نیست
+        // اندازه‌اش را تغییر بدهیم؛ فقط آینه (مقصد) تغییر اندازه می‌دهد.
         if (Native.IsIconic(src)) Native.ShowWindow(src, Native.SW_RESTORE);
-        Native.SetWindowPos(src, Native.HWND_BOTTOM, PARK_X, PARK_Y, PARK_W, PARK_H, Native.SWP_NOACTIVATE);
+        MakeInvisibleButAlive(src);
+        var park = GetParkBounds();
+        Native.SetWindowPos(src, Native.HWND_BOTTOM, park.X, park.Y, park.W, park.H, Native.SWP_NOACTIVATE);
 
         var form = new MirrorForm(id, src, originalRect, proc);
         form.SetDesktopBounds(x, y, Math.Max(120, w), Math.Max(80, h));
@@ -158,6 +188,7 @@ static class Program
         if (restore && Native.IsWindow(form.SourceHandle))
         {
             var r = form.OriginalRect;
+            RestoreVisibility(form.SourceHandle);
             Native.SetWindowPos(form.SourceHandle, Native.HWND_TOP, r.Left, r.Top, r.W, r.H, 0);
             Native.ShowWindow(form.SourceHandle, Native.SW_RESTORE);
             Native.SetForegroundWindow(form.SourceHandle);
@@ -202,6 +233,7 @@ static class Program
                 if (Native.IsWindow(form.SourceHandle))
                 {
                     var r = form.OriginalRect;
+                    RestoreVisibility(form.SourceHandle);
                     Native.SetWindowPos(form.SourceHandle, Native.HWND_TOP, r.Left, r.Top, r.W, r.H, 0);
                     Native.ShowWindow(form.SourceHandle, Native.SW_RESTORE);
                 }

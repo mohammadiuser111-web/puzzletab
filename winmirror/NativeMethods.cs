@@ -65,6 +65,21 @@ public static class Native
     public static readonly IntPtr HWND_BOTTOM = new IntPtr(1);
     public static readonly IntPtr HWND_TOP = IntPtr.Zero;
 
+    // برای «پارکِ نامرئیِ روی صفحه» به‌جایِ خارج‌کردنِ کامل از مرزهای مانیتور: برنامه‌های
+    // شتاب‌دهی‌شده با GPU (Chromium/Electron/Qt-ANGLE مثلِ VSCode و تلگرام) وقتی پنجره کاملاً
+    // بیرون از همهٔ مانیتورها باشد، آن را «occluded/نامرئی» تشخیص می‌دهند و رندر را متوقف می‌کنند
+    // (باعثِ سفیدشدنِ آینه می‌شود). راه‌حل: پنجره را روی مانیتورِ واقعی نگه می‌داریم ولی با
+    // WS_EX_LAYERED + آلفای صفر «نامرئی» و با WS_EX_TRANSPARENT «کلیک‌ناپذیر» می‌کنیم — از نظرِ
+    // خودِ برنامه، پنجره هنوز کاملاً «روی صفحه و دیده‌شدنی» است، فقط کاربر چیزی نمی‌بیند.
+    public const int GWL_EXSTYLE = -20;
+    public const int WS_EX_LAYERED = 0x80000;
+    public const int WS_EX_TRANSPARENT = 0x20;
+    public const uint LWA_ALPHA = 0x2;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtr")] public static extern IntPtr GetWindowLongPtr(IntPtr hWnd, int nIndex);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtr")] public static extern IntPtr SetWindowLongPtr(IntPtr hWnd, int nIndex, IntPtr dwNewLong);
+    [DllImport("user32.dll")] public static extern bool SetLayeredWindowAttributes(IntPtr hWnd, uint crKey, byte bAlpha, uint dwFlags);
+
     [DllImport("dwmapi.dll")] public static extern int DwmRegisterThumbnail(IntPtr dest, IntPtr src, out IntPtr thumb);
     [DllImport("dwmapi.dll")] public static extern int DwmUnregisterThumbnail(IntPtr thumb);
     [DllImport("dwmapi.dll")] public static extern int DwmUpdateThumbnailProperties(IntPtr thumb, ref DWM_THUMBNAIL_PROPERTIES props);

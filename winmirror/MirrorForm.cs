@@ -162,10 +162,8 @@ public class MirrorForm : Form
         EnsureSourceFocused();
         if (e.Button == MouseButtons.Right) _rightDown = true; else _leftDown = true;
         Capture = true; // تا پایانِ درگ، حتی اگر موس از مرزِ کادر بیرون برود، رویدادها را دریافت کنیم
-        var (sx, sy) = ToSourceClient(e.X, e.Y);
-        var lp = Native.MakeLParam(sx, sy);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONDOWN : Native.WM_LBUTTONDOWN;
-        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), lp);
+        SendMouseMessageWithCursorSync(msg, e.X, e.Y, CurrentButtonFlags());
     }
 
     void OnMouseUp(object? sender, MouseEventArgs e)
@@ -175,10 +173,33 @@ public class MirrorForm : Form
         if (e.Button == MouseButtons.Right) _rightDown = false; else _leftDown = false;
         if (!_leftDown && !_rightDown) Capture = false;
         var (cx, cy) = ClampToContentArea(e.X, e.Y);
-        var (sx, sy) = ToSourceClient(cx, cy);
-        var lp = Native.MakeLParam(sx, sy);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONUP : Native.WM_LBUTTONUP;
-        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), lp);
+        SendMouseMessageWithCursorSync(msg, cx, cy, CurrentButtonFlags());
+    }
+
+    // تلگرام (مثلِ بیشترِ اپ‌هایِ ساخته‌شده با Qt) برای تصمیم‌گیریِ «کلیک بیرونِ پنل رخ داد، پس
+    // پنل را ببند» (مثلِ پنلِ گیف/استیکر)، به موقعیتِ واقعیِ نشانگرِ موسِ کلِ سیستم نگاه می‌کند —
+    // نه فقط به پیامِ کلیکی که ما مستقیماً به پنجره می‌فرستیم. چون نشانگرِ واقعیِ کاربر همیشه روی
+    // خودِ کادرِ آینه می‌ماند (نه روی پنجرهٔ واقعیِ پارک‌شده که جایِ دیگری از صفحه نشسته)، از دیدِ
+    // تلگرام همیشه به‌نظر می‌رسد کلیک «بیرون از پنل» رخ داده — برای همین پنل‌هایی مثلِ گیف/استیکر
+    // بلافاصله بعد از باز شدن دوباره بسته می‌شوند (مثلِ چشمک‌زدنِ یک لامپ).
+    // راه‌حل: درستِ دورِ لحظهٔ ارسالِ خودِ کلیک، نشانگرِ واقعیِ سیستم را موقتاً به مکانِ متناظرِ
+    // روی پنجرهٔ واقعی می‌بریم، کلیک را می‌فرستیم، کمی صبر می‌کنیم تا ریسهٔ برنامهٔ مقصد پیام را
+    // پردازش کند، و بعد نشانگر را به مکانِ بصریِ درستش (همان‌جا که کاربر واقعاً موس را نگه داشته)
+    // برمی‌گردانیم — تا هم تلگرام کلیک را «داخلِ» خودش ببیند و هم تجربهٔ کاربر در آینه دست‌نخورده
+    // بماند.
+    void SendMouseMessageWithCursorSync(uint msg, int localX, int localY, IntPtr wParam)
+    {
+        var (sx, sy) = ToSourceClient(localX, localY);
+        var pt = new POINT { X = sx, Y = sy };
+        Native.ClientToScreen(SourceHandle, ref pt);
+        var lp = Native.MakeLParam(sx, sy);
+        var visualScreenPt = PointToScreen(new Point(localX, localY));
+
+        Native.SetCursorPos(pt.X, pt.Y);
+        Native.PostMessage(SourceHandle, msg, wParam, lp);
+        System.Threading.Thread.Sleep(15);
+        Native.SetCursorPos(visualScreenPt.X, visualScreenPt.Y);
     }
 
     void OnMouseMove(object? sender, MouseEventArgs e)
@@ -200,7 +221,11 @@ public class MirrorForm : Form
         Native.ClientToScreen(SourceHandle, ref pt); // WM_MOUSEWHEEL از مختصاتِ صفحه استفاده می‌کند
         var lp = Native.MakeLParam(pt.X, pt.Y);
         var wp = (IntPtr)((e.Delta << 16) & unchecked((int)0xFFFF0000));
+        var visualScreenPt = PointToScreen(new Point(e.X, e.Y));
+        Native.SetCursorPos(pt.X, pt.Y);
         Native.PostMessage(SourceHandle, Native.WM_MOUSEWHEEL, wp, lp);
+        System.Threading.Thread.Sleep(15);
+        Native.SetCursorPos(visualScreenPt.X, visualScreenPt.Y);
     }
 
     bool _suppressDeactivateReset;

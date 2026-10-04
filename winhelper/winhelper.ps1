@@ -41,8 +41,8 @@ public class WinAPI {
     [DllImport("user32.dll")] public static extern bool IsIconic(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern bool IsZoomed(IntPtr hWnd);
     [DllImport("user32.dll")] public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
-    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
-    [DllImport("dwmapi.dll")] public static extern int DwmGetWindowAttribute(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmGetWindowAttributeRect(IntPtr hwnd, int dwAttribute, out RECT pvAttribute, int cbAttribute);
+    [DllImport("dwmapi.dll", EntryPoint = "DwmGetWindowAttribute")] public static extern int DwmGetWindowAttributeInt(IntPtr hwnd, int dwAttribute, out int pvAttribute, int cbAttribute);
 }
 "@
 
@@ -57,8 +57,12 @@ $DWMWA_EXTENDED_FRAME_BOUNDS = 9
 
 function Get-ExtendedRect([IntPtr]$h) {
   $r = New-Object RECT
-  $ok = [WinAPI]::DwmGetWindowAttribute($h, $DWMWA_EXTENDED_FRAME_BOUNDS, [ref]$r, [System.Runtime.InteropServices.Marshal]::SizeOf([type][RECT]))
-  if ($ok -ne 0) { [WinAPI]::GetWindowRect($h, [ref]$r) | Out-Null }
+  try {
+    $ok = [WinAPI]::DwmGetWindowAttributeRect($h, $DWMWA_EXTENDED_FRAME_BOUNDS, [ref]$r, [System.Runtime.InteropServices.Marshal]::SizeOf([type][RECT]))
+    if ($ok -ne 0) { [WinAPI]::GetWindowRect($h, [ref]$r) | Out-Null }
+  } catch {
+    [WinAPI]::GetWindowRect($h, [ref]$r) | Out-Null
+  }
   return $r
 }
 
@@ -75,9 +79,13 @@ function Get-FrameOffset([IntPtr]$h) {
 }
 
 function Is-Cloaked([IntPtr]$h) {
-  $v = 0
-  $ok = [WinAPI]::DwmGetWindowAttribute($h, $DWMWA_CLOAKED, [ref]$v, 4)
-  return ($ok -eq 0 -and $v -ne 0)
+  try {
+    $v = 0
+    $ok = [WinAPI]::DwmGetWindowAttributeInt($h, $DWMWA_CLOAKED, [ref]$v, 4)
+    return ($ok -eq 0 -and $v -ne 0)
+  } catch {
+    return $false
+  }
 }
 
 function Get-IconBase64([string]$exePath) {
@@ -123,30 +131,70 @@ function Get-WindowInfo([IntPtr]$h) {
 function Cmd-List {
   $results = New-Object System.Collections.Generic.List[object]
   $selfPid = $PID
+  $dbg = @{ seen = 0; afterVisible = 0; afterOwner = 0; afterTool = 0; afterCloak = 0; afterTitle = 0; afterClass = 0; errors = New-Object System.Collections.Generic.List[string] }
+
   $enumProc = {
     param([IntPtr]$h, [IntPtr]$lp)
     try {
+      $dbg.seen++
       if (-not [WinAPI]::IsWindowVisible($h)) { return $true }
+      $dbg.afterVisible++
       if ([WinAPI]::GetWindow($h, $GW_OWNER) -ne [IntPtr]::Zero) { return $true }
+      $dbg.afterOwner++
       $ex = [WinAPI]::GetWindowLong($h, $GWL_EXSTYLE)
       if (($ex -band $WS_EX_TOOLWINDOW) -ne 0) { return $true }
+      $dbg.afterTool++
       if (Is-Cloaked $h) { return $true }
+      $dbg.afterCloak++
       $len = [WinAPI]::GetWindowTextLength($h)
       if ($len -eq 0) { return $true }
+      $dbg.afterTitle++
       $cls = New-Object System.Text.StringBuilder 256
       [WinAPI]::GetClassName($h, $cls, 256) | Out-Null
       $className = $cls.ToString()
       $blacklist = @('Progman', 'Button', 'Shell_TrayWnd', 'WorkerW', 'Windows.UI.Core.CoreWindow', 'ApplicationManager_DesktopShellWindow')
       if ($blacklist -contains $className) { return $true }
+      $dbg.afterClass++
       $info = Get-WindowInfo $h
       if ($info.pid -eq $selfPid) { return $true }
       if ([string]::IsNullOrWhiteSpace($info.title)) { return $true }
       $results.Add($info)
-    } catch {}
+    } catch {
+      $dbg.errors.Add($_.Exception.Message)
+    }
     return $true
   }
-  [WinAPI]::EnumWindows($enumProc, [IntPtr]::Zero) | Out-Null
-  return @{ ok = $true; windows = $results }
+
+  # نگه‌داشتنِ ارجاع صریح به Delegate تا پیش از پایانِ EnumWindows توسطِ GC جمع‌آوری نشود.
+  $delegate = [WinAPI+EnumWindowsProc]$enumProc
+  [WinAPI]::EnumWindows($delegate, [IntPtr]::Zero) | Out-Null
+
+  # اگر فیلترها همه‌چیز را حذف کردند ولی پنجره‌ای واقعاً دیده شده، نسخهٔ سخت‌گیرانه‌تر را کنار می‌گذاریم
+  # و یک تلاش دومِ «نرم‌گیرانه» (فقط دیداپذیر + عنوان غیرخالی + بدون مالک) انجام می‌دهیم.
+  if ($results.Count -eq 0 -and $dbg.seen -gt 0) {
+    $fallback = New-Object System.Collections.Generic.List[object]
+    $enumProc2 = {
+      param([IntPtr]$h, [IntPtr]$lp)
+      try {
+        if (-not [WinAPI]::IsWindowVisible($h)) { return $true }
+        if ([WinAPI]::GetWindow($h, $GW_OWNER) -ne [IntPtr]::Zero) { return $true }
+        $len = [WinAPI]::GetWindowTextLength($h)
+        if ($len -eq 0) { return $true }
+        $info = Get-WindowInfo $h
+        if ($info.pid -eq $selfPid) { return $true }
+        if ([string]::IsNullOrWhiteSpace($info.title)) { return $true }
+        $fallback.Add($info)
+      } catch {}
+      return $true
+    }
+    $delegate2 = [WinAPI+EnumWindowsProc]$enumProc2
+    [WinAPI]::EnumWindows($delegate2, [IntPtr]::Zero) | Out-Null
+    if ($fallback.Count -gt 0) {
+      return @{ ok = $true; windows = $fallback; debug = $dbg; usedFallback = $true }
+    }
+  }
+
+  return @{ ok = $true; windows = $results; debug = $dbg }
 }
 
 function Cmd-Rect {

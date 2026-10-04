@@ -24,6 +24,7 @@ public class MirrorForm : Form
 
     IntPtr _thumb = IntPtr.Zero;
     bool _focused;
+    bool _leftDown, _rightDown; // وضعیتِ فعلیِ دکمه‌های موس — برای گزارشِ درستِ wParam به WM_MOUSEMOVE
     Color _accent = Color.FromArgb(0, 120, 212);
     System.Windows.Forms.Timer? _watchdog;
 
@@ -126,6 +127,21 @@ public class MirrorForm : Form
     bool InContentArea(int localX, int localY) =>
         localX >= BORDER && localY >= BORDER && localX < ClientSize.Width - BORDER && localY < ClientSize.Height - BORDER;
 
+    // مختصاتِ محلی را به داخلِ ناحیهٔ محتوا «گیره» می‌کند — برای وقتی که کاربر در حینِ یک
+    // درگ (دکمهٔ موس پایین)، لحظه‌ای از لبهٔ کادر بیرون می‌زند (مثلاً درگ‌کردنِ اسکرول‌بار یا
+    // جابه‌جاییِ موارد تا نزدیکیِ لبه). بدونِ این گیره، آن درگ در پنجرهٔ واقعی «نیمه‌کاره» باقی
+    // می‌ماند چون دیگر هیچ WM_MOUSEMOVE/WM_xBUTTONUPـی دریافت نمی‌کند.
+    (int x, int y) ClampToContentArea(int localX, int localY)
+    {
+        int minX = BORDER, minY = BORDER;
+        int maxX = Math.Max(BORDER, ClientSize.Width - BORDER - 1);
+        int maxY = Math.Max(BORDER, ClientSize.Height - BORDER - 1);
+        return (Math.Clamp(localX, minX, maxX), Math.Clamp(localY, minY, maxY));
+    }
+
+    IntPtr CurrentButtonFlags() =>
+        (IntPtr)((_leftDown ? Native.MK_LBUTTON : 0) | (_rightDown ? Native.MK_RBUTTON : 0));
+
     void OnBorderDoubleClick(object? sender, MouseEventArgs e)
     {
         // دابل‌کلیک روی کادر نازک (نه محتوا) = «بازگردانی پنجره به حالت واقعی/عادی»
@@ -136,28 +152,37 @@ public class MirrorForm : Form
     {
         if (!InContentArea(e.X, e.Y)) return;
         Focus();
+        if (e.Button == MouseButtons.Right) _rightDown = true; else _leftDown = true;
+        Capture = true; // تا پایانِ درگ، حتی اگر موس از مرزِ کادر بیرون برود، رویدادها را دریافت کنیم
         var (sx, sy) = ToSourceClient(e.X, e.Y);
         var lp = Native.MakeLParam(sx, sy);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONDOWN : Native.WM_LBUTTONDOWN;
-        Native.PostMessage(SourceHandle, msg, (IntPtr)Native.MK_LBUTTON, lp);
+        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), lp);
     }
 
     void OnMouseUp(object? sender, MouseEventArgs e)
     {
-        if (!InContentArea(e.X, e.Y)) return;
-        var (sx, sy) = ToSourceClient(e.X, e.Y);
+        bool wasDragging = _leftDown || _rightDown;
+        if (!InContentArea(e.X, e.Y) && !wasDragging) return;
+        if (e.Button == MouseButtons.Right) _rightDown = false; else _leftDown = false;
+        if (!_leftDown && !_rightDown) Capture = false;
+        var (cx, cy) = ClampToContentArea(e.X, e.Y);
+        var (sx, sy) = ToSourceClient(cx, cy);
         var lp = Native.MakeLParam(sx, sy);
         uint msg = e.Button == MouseButtons.Right ? Native.WM_RBUTTONUP : Native.WM_LBUTTONUP;
-        Native.PostMessage(SourceHandle, msg, IntPtr.Zero, lp);
+        Native.PostMessage(SourceHandle, msg, CurrentButtonFlags(), lp);
     }
 
     void OnMouseMove(object? sender, MouseEventArgs e)
     {
-        if (!InContentArea(e.X, e.Y)) return;
-        var (sx, sy) = ToSourceClient(e.X, e.Y);
+        bool dragging = _leftDown || _rightDown;
+        if (!InContentArea(e.X, e.Y) && !dragging) return;
+        var (cx, cy) = dragging ? ClampToContentArea(e.X, e.Y) : (e.X, e.Y);
+        var (sx, sy) = ToSourceClient(cx, cy);
         var lp = Native.MakeLParam(sx, sy);
-        Native.PostMessage(SourceHandle, Native.WM_MOUSEMOVE, IntPtr.Zero, lp);
+        Native.PostMessage(SourceHandle, Native.WM_MOUSEMOVE, CurrentButtonFlags(), lp);
     }
+
 
     void OnMouseWheel(object? sender, MouseEventArgs e)
     {
@@ -182,6 +207,9 @@ public class MirrorForm : Form
     {
         base.OnDeactivate(e);
         _sourceIsForeground = false;
+        // اگر در حینِ یک درگ، فوکوس را از دست بدهیم (مثلاً Alt+Tab)، وضعیتِ دکمه‌ها را پاک می‌کنیم
+        // تا در تعامل‌های بعدی به‌اشتباه «دکمه هنوز پایین است» گزارش نشود.
+        _leftDown = false; _rightDown = false; Capture = false;
     }
 
     void OnKeyPress(object? sender, KeyPressEventArgs e)

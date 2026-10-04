@@ -19,8 +19,12 @@ public class MirrorForm : Form
     public RECT OriginalRect { get; set; }
     public string ProcessName { get; set; } = "";
 
-    const int BORDER = 8;
-    const int RESIZE_EDGE = 4; // اولین ۴ پیکسل لبه: تغییر اندازه؛ ۴ پیکسل بعدی: جابه‌جایی (HTCAPTION)
+    const int BORDER = 14;
+    const int RESIZE_EDGE = 5; // اولین ۵ پیکسلِ لبه: تغییراندازه؛ ۹ پیکسلِ بعدی: جابه‌جایی (HTCAPTION)
+    // نکته: قبلاً BORDER=8 و RESIZE_EDGE=4 بود، یعنی فقط ۴ پیکسل برای جابه‌جاییِ کادر باقی می‌ماند —
+    // که برای گرفتنِ دقیق با موس خیلی نازک بود و کاربر عملاً نمی‌توانست کادر را جابه‌جا کند
+    // (یا به تغییراندازه می‌خورد، یا کلیک به محتوایِ تلگرام فوروارد می‌شد). حالا نوارِ جابه‌جایی
+    // به ۹ پیکسل رسیده که گرفتنش با موس واقع‌بینانه‌تر است.
 
     IntPtr _thumb = IntPtr.Zero;
     bool _focused;

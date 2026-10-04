@@ -203,20 +203,33 @@ public class MirrorForm : Form
         Native.PostMessage(SourceHandle, Native.WM_MOUSEWHEEL, wp, lp);
     }
 
-    bool _sourceIsForeground;
+    bool _suppressDeactivateReset;
     void EnsureSourceFocused()
     {
-        if (_sourceIsForeground) return;
+        // اگر پنجرهٔ واقعی همین الان هم فورگراند است، دیگر لازم نیست دوباره SetForegroundWindow
+        // را صدا بزنیم — این مهم است چون این فراخوانی خودِ MirrorForm را «غیرفعال» می‌کند (چون یک
+        // پنجرهٔ دیگر دارد فورگراند می‌شود)، و اگر این اتفاق در هر کلیک دوباره تکرار شود، باعثِ
+        // سوییچِ مداومِ فورگراند بینِ آینه و پنجرهٔ واقعی در هر تک‌کلیک می‌شود — که به‌نوبهٔ خود
+        // باعثِ رفتارهایِ عجیب در برنامهٔ مقصد می‌شود (مثلاً بسته‌شدنِ خودکارِ پنل‌های popup به
+        // محضِ هر تغییرِ activation، که دقیقاً شبیهِ «باز و بسته شدنِ پنلِ گیف» است).
+        if (Native.GetForegroundWindow() == SourceHandle) return;
+        _suppressDeactivateReset = true;
         Native.SetForegroundWindow(SourceHandle);
-        _sourceIsForeground = true;
     }
 
     protected override void OnDeactivate(EventArgs e)
     {
         base.OnDeactivate(e);
-        _sourceIsForeground = false;
-        // اگر در حینِ یک درگ، فوکوس را از دست بدهیم (مثلاً Alt+Tab)، وضعیتِ دکمه‌ها را پاک می‌کنیم
-        // تا در تعامل‌های بعدی به‌اشتباه «دکمه هنوز پایین است» گزارش نشود.
+        if (_suppressDeactivateReset)
+        {
+            // این غیرفعال‌شدن به‌خاطرِ فوکوس‌دادنِ عمدیِ خودِ ما به پنجرهٔ واقعی بود (در
+            // EnsureSourceFocused)، نه اینکه کاربر واقعاً جایِ دیگری رفته باشد (Alt+Tab) —
+            // پس نباید وضعیتِ درگ/کلیکِ در حالِ انجام را پاک کنیم.
+            _suppressDeactivateReset = false;
+            return;
+        }
+        // اگر در حینِ یک درگ، فوکوس را واقعاً از دست بدهیم (مثلاً کاربر Alt+Tab کرد)، وضعیتِ
+        // دکمه‌ها را پاک می‌کنیم تا در تعامل‌های بعدی به‌اشتباه «دکمه هنوز پایین است» گزارش نشود.
         _leftDown = false; _rightDown = false; Capture = false;
     }
 

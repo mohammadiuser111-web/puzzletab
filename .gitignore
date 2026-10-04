@@ -4,5 +4,6 @@ release/
 selftest-*.png
 winmirror/bin/
 winmirror/obj/
-winmirror/publish/
+winmirror/publish/*
+!winmirror/publish/winmirror.exe
 *.pdb

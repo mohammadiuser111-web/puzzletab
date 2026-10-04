@@ -74,88 +74,79 @@ svg.ic { width: 14px; height: 14px; flex: none; display: inline-block; vertical-
   backdrop-filter: blur(20px);
 }
 
-html[data-theme="dark"] {
-  --win-bg: #202020;
-  --win-titlebar: #2b2b2b;
-  --win-border: rgba(255,255,255,.08);
-  --win-caption-fg: #e6e6e6;
-  --win-caption-hover: rgba(255,255,255,.08);
-}
-html[data-theme="light"] {
-  --win-bg: #f3f3f3;
-  --win-titlebar: #fafafa;
-  --win-border: rgba(0,0,0,.08);
-  --win-caption-fg: #1b1b1b;
-  --win-caption-hover: rgba(0,0,0,.06);
-}
-
 .gtile {
   position: absolute;
   border-radius: 8px;
-  border: 1px solid var(--win-border);
-  background: var(--win-bg);
-  box-shadow: 0 8px 16px rgba(0,0,0,.28), 0 1.5px 4px rgba(0,0,0,.22);
-  display: flex; flex-direction: column;
-  overflow: hidden;
+  border: 2px solid var(--accent);
+  background: transparent;
+  box-shadow: 0 0 0 1px rgba(0,0,0,.25);
+  overflow: visible;
   min-width: 220px; min-height: 140px;
-  transition: box-shadow .12s ease;
+  transition: border-color .12s ease, box-shadow .12s ease;
 }
-.gtile.dragging, .gtile.resizing { box-shadow: 0 20px 44px rgba(0,0,0,.42), 0 0 0 1px var(--accent); }
-.gtile.minimized { opacity: .55; }
+.gtile.dragging, .gtile.resizing { box-shadow: 0 0 0 3px rgba(0,120,212,.35); }
+.gtile.minimized { border-color: rgba(255,255,255,.35); border-style: dashed; }
 .gtile.gmaximized { border-radius: 0; }
 
+/* برچسبِ شناور — بیرونِ کادرِ پنجرهٔ واقعی قرار می‌گیرد تا هیچ‌وقت روی محتوای آن ننشیند */
 .ghead {
   -webkit-app-region: no-drag;
   direction: ltr;
-  flex: none; height: 32px;
+  position: absolute; left: 0; right: 0; top: -34px; height: 30px;
   display: flex; align-items: center;
-  padding: 0 0 0 12px;
-  background: var(--win-titlebar);
+  padding: 0 0 0 10px;
+  background: var(--head);
+  backdrop-filter: blur(16px) saturate(160%);
+  -webkit-backdrop-filter: blur(16px) saturate(160%);
+  border: 1px solid var(--stroke);
+  border-radius: 7px;
   cursor: grab;
-  border-bottom: 1px solid var(--win-border);
+  box-shadow: 0 4px 14px rgba(0,0,0,.3);
 }
 .ghead:active { cursor: grabbing; }
-.gic { width: 16px; height: 16px; flex: none; display: grid; place-items: center; font-size: 12px; margin-inline-end: 10px; }
+.gtile.headInside .ghead { top: 4px; left: 4px; right: 4px; }
+.gic { width: 15px; height: 15px; flex: none; display: grid; place-items: center; font-size: 12px; margin-inline-end: 9px; }
 .gic img { width: 100%; height: 100%; object-fit: contain; }
 .gtitle {
-  flex: 1; min-width: 0; font-size: 12px; color: var(--win-caption-fg);
+  flex: 1; min-width: 0; font-size: 11.5px; color: var(--text);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-family: 'Rubik', "Segoe UI Variable Text", "Segoe UI", Tahoma, sans-serif;
 }
 .gref {
-  flex: none; height: 22px; font-size: 10.5px; border-radius: 4px; border: 1px solid var(--win-border);
-  background: var(--win-caption-hover); color: var(--win-caption-fg); padding: 0 4px; margin-inline-end: 6px;
+  flex: none; height: 20px; font-size: 10px; border-radius: 4px; border: 1px solid var(--stroke);
+  background: rgba(255,255,255,.08); color: var(--text); padding: 0 4px; margin-inline-end: 6px;
 }
 
 .gcaps { flex: none; display: flex; align-items: stretch; height: 100%; }
 .gcap {
   -webkit-app-region: no-drag;
-  width: 42px; height: 100%; border: 0; background: transparent;
-  color: var(--win-caption-fg); cursor: pointer;
+  width: 32px; height: 100%; border: 0; background: transparent;
+  color: var(--text); cursor: pointer;
   display: grid; place-items: center;
 }
-.gcap svg { width: 10px; height: 10px; fill: none; stroke: currentColor; stroke-width: 1; }
+.gcap svg { width: 9px; height: 9px; fill: none; stroke: currentColor; stroke-width: 1; }
 .gcap.gmax svg rect { fill: none; }
-.gcap:hover { background: var(--win-caption-hover); }
+.gcap:hover { background: rgba(255,255,255,.12); }
 .gcap.gx:hover { background: #c42b1c; color: #fff; }
 .gcap.gx:hover svg { stroke: #fff; }
 
-.gbody { flex: 1; position: relative; display: grid; place-items: center; padding: 10px; }
-.ginfo { font-size: 11.5px; color: var(--text-2); text-align: center; line-height: 1.6; }
+/* داخلِ کادر کاملاً شفاف است — محتوای واقعیِ پنجره باید بدون هیچ پوششی دیده شود */
+.gframe { position: absolute; inset: 0; pointer-events: none; }
 .gminOverlay {
   position: absolute; inset: 0; display: grid; place-items: center;
-  background: rgba(0,0,0,.45); color: #fff; font-size: 11.5px; text-align: center;
-  padding: 10px; cursor: pointer;
+  background: rgba(0,0,0,.55); color: #fff; font-size: 11.5px; text-align: center;
+  padding: 10px; cursor: pointer; pointer-events: auto; border-radius: 6px;
 }
 .gminOverlay[hidden] { display: none; }
 
-.rz { position: absolute; }
-.rz.n, .rz.s { left: 10px; right: 10px; height: 8px; cursor: ns-resize; }
-.rz.n { top: -4px; } .rz.s { bottom: -4px; }
-.rz.e, .rz.w { top: 10px; bottom: 10px; width: 8px; cursor: ew-resize; }
-.rz.e { right: -4px; } .rz.w { left: -4px; }
-.rz.ne, .rz.nw, .rz.se, .rz.sw { width: 16px; height: 16px; }
-.rz.ne { top: -4px; right: -4px; cursor: nesw-resize; }
-.rz.nw { top: -4px; left: -4px; cursor: nwse-resize; }
-.rz.se { bottom: -4px; right: -4px; cursor: nwse-resize; }
-.rz.sw { bottom: -4px; left: -4px; cursor: nesw-resize; }
+.rz { position: absolute; pointer-events: auto; }
+.rz.n, .rz.s { left: 10px; right: 10px; height: 10px; cursor: ns-resize; }
+.rz.n { top: -5px; } .rz.s { bottom: -5px; }
+.rz.e, .rz.w { top: 10px; bottom: 10px; width: 10px; cursor: ew-resize; }
+.rz.e { right: -5px; } .rz.w { left: -5px; }
+.rz.ne, .rz.nw, .rz.se, .rz.sw { width: 18px; height: 18px; }
+.rz.ne { top: -5px; right: -5px; cursor: nesw-resize; }
+.rz.nw { top: -5px; left: -5px; cursor: nwse-resize; }
+.rz.se { bottom: -5px; right: -5px; cursor: nwse-resize; }
+.rz.sw { bottom: -5px; left: -5px; cursor: nesw-resize; }
+

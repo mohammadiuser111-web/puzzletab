@@ -6,11 +6,16 @@
   const ZOOM_STEPS_TABLE = [25, 33, 50, 67, 75, 80, 90, 100, 110, 125, 150, 175, 200, 250, 300, 400, 500]
   const ZOOM_100_INDEX = ZOOM_STEPS_TABLE.indexOf(100) // 7
   const BROWSER_PROCESSES = new Set([
+    'chrome', 'msedge', 'firefox', 'brave', 'opera', 'vivaldi', 'chromium',
+    // پشتیبانیِ احتیاطی از دادهٔ احتمالیِ همراه با پسوند .exe
     'chrome.exe', 'msedge.exe', 'firefox.exe', 'brave.exe', 'opera.exe', 'vivaldi.exe', 'chromium.exe'
   ])
 
   function isBrowserProcess (proc) {
-    return BROWSER_PROCESSES.has(String(proc || '').toLowerCase())
+    // Process.ProcessName در ویندوز هرگز شامل پسوند .exe نیست (مثلاً "chrome" نه "chrome.exe")
+    // ولی برای اطمینان، پسوند احتمالی را هم حذف می‌کنیم تا با هر دو حالت کار کند.
+    const name = String(proc || '').toLowerCase().replace(/\.exe$/, '')
+    return BROWSER_PROCESSES.has(name) || BROWSER_PROCESSES.has(name + '.exe')
   }
 
   // Given a desired on-screen width and the "reference" (100%-layout) width,
@@ -86,6 +91,11 @@
     els.empty.hidden = state.ghosts.size !== 0
   }
 
+  function updateHeadPos (g) {
+    if (g.y < 40) g.el.classList.add('headInside')
+    else g.el.classList.remove('headInside')
+  }
+
   function escapeHtml (s) {
     const d = document.createElement('div')
     d.textContent = String(s)
@@ -99,7 +109,6 @@
     const icImg = frag.querySelector('.gic img')
     const titleEl = frag.querySelector('.gtitle')
     const refSel = frag.querySelector('.gref')
-    const infoEl = frag.querySelector('.ginfo')
     const btnX = frag.querySelector('.gx')
     const btnMin = frag.querySelector('.gmin')
     const btnMax = frag.querySelector('.gmax')
@@ -125,6 +134,7 @@
     el.style.top = y + 'px'
     el.style.width = w + 'px'
     el.style.height = h + 'px'
+    if (y < 40) el.classList.add('headInside')
 
     const g = {
       el, handle: win.handle, title: win.title, process: win.process, icon: win.icon,
@@ -140,10 +150,8 @@
         applyZoomFor(g)
         schedulePersist()
       })
-      infoEl.textContent = ''
     } else {
       refSel.hidden = true
-      infoEl.textContent = 'برنامهٔ دسکتاپ — بدون نیاز به زوم'
     }
 
     btnX.addEventListener('click', (e) => {
@@ -181,6 +189,7 @@
       }
       el.style.left = g.x + 'px'; el.style.top = g.y + 'px'
       el.style.width = g.w + 'px'; el.style.height = g.h + 'px'
+      updateHeadPos(g)
       await applyMove(g)
       if (g.isBrowser) await applyZoomFor(g)
       schedulePersist()
@@ -271,6 +280,7 @@
     g.el.style.top = y + 'px'
     g.el.style.width = w + 'px'
     g.el.style.height = h + 'px'
+    updateHeadPos(g)
   }
 
   function finishDrag () {

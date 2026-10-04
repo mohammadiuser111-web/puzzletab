@@ -56,11 +56,14 @@ const realBackend = {
 }
 
 /* ---------- بک‌اند آزمایشی (برای توسعه/تست روی غیر ویندوز) ---------- */
+/* توجه: process بدون پسوند .exe است — دقیقاً مثل واقعیت در ویندوز
+ * (Process.ProcessName در دات‌نت هرگز شامل .exe نیست)، تا باگ‌های
+ * مشابهِ تطبیقِ نام پردازش در تست خودکار هم قابل تشخیص باشند. */
 const mockState = new Map([
-  [1001, { handle: 1001, title: 'تلگرام دسکتاپ — گفتگوها', pid: 111, process: 'Telegram.exe', exePath: 'C:/Apps/Telegram.exe', x: 80, y: 80, w: 900, h: 640, maximized: false, minimized: false, icon: null }],
-  [1002, { handle: 1002, title: 'Telegram Web — Chrome', pid: 222, process: 'chrome.exe', exePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', x: 1000, y: 80, w: 1100, h: 720, maximized: false, minimized: false, icon: null }],
-  [1003, { handle: 1003, title: 'آپارات — Microsoft Edge', pid: 333, process: 'msedge.exe', exePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', x: 150, y: 760, w: 1000, h: 600, maximized: false, minimized: false, icon: null }],
-  [1004, { handle: 1004, title: 'Spotify', pid: 444, process: 'Spotify.exe', exePath: 'C:/Users/me/AppData/Roaming/Spotify/Spotify.exe', x: 1200, y: 760, w: 760, h: 520, maximized: false, minimized: false, icon: null }]
+  [1001, { handle: 1001, title: 'تلگرام دسکتاپ — گفتگوها', pid: 111, process: 'Telegram', exePath: 'C:/Apps/Telegram.exe', x: 80, y: 80, w: 900, h: 640, maximized: false, minimized: false, icon: null }],
+  [1002, { handle: 1002, title: 'Telegram Web — Chrome', pid: 222, process: 'chrome', exePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', x: 1000, y: 80, w: 1100, h: 720, maximized: false, minimized: false, icon: null }],
+  [1003, { handle: 1003, title: 'آپارات — Microsoft Edge', pid: 333, process: 'msedge', exePath: 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', x: 150, y: 760, w: 1000, h: 600, maximized: false, minimized: false, icon: null }],
+  [1004, { handle: 1004, title: 'Spotify', pid: 444, process: 'Spotify', exePath: 'C:/Users/me/AppData/Roaming/Spotify/Spotify.exe', x: 1200, y: 760, w: 760, h: 520, maximized: false, minimized: false, icon: null }]
 ])
 
 const mockBackend = {
